@@ -3,21 +3,21 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/term"
 
 	"tavrn.sh/internal/jukebox"
@@ -68,22 +68,11 @@ func main() {
 		}
 	}
 
-	// Check mpv is installed unless --no-audio
+	// Check mpv is available; fall back to no-audio silently if not.
 	if !noAudio {
 		if _, err := exec.LookPath("mpv"); err != nil {
-			fmt.Println("tavrn: mpv not found — required for audio playback")
-			fmt.Println()
-			switch runtime.GOOS {
-			case "darwin":
-				fmt.Println("  Install:  brew install mpv")
-			case "linux":
-				fmt.Println("  Install:  sudo apt install mpv")
-			default:
-				fmt.Println("  Install mpv from https://mpv.io/installation/")
-			}
-			fmt.Println()
-			fmt.Println("  Or connect without audio:  tavrn --no-audio")
-			os.Exit(1)
+			fmt.Fprintln(os.Stderr, "tavrn: mpv not found — connecting without audio (install mpv for music)")
+			noAudio = true
 		}
 	}
 
@@ -97,12 +86,9 @@ func main() {
 
 func connect(addr string, noAudio bool) {
 	authMethods := sshAuthMethods()
-	if len(authMethods) == 0 {
-		log.Fatal("no SSH keys found")
-	}
 
 	config := &ssh.ClientConfig{
-		User:            os.Getenv("USER"),
+		User:            "tavrn",
 		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
@@ -295,51 +281,57 @@ func handleResize(fd int, session *ssh.Session) {
 	}
 }
 
+// sshAuthMethods returns auth methods for the connection.
+// A tavrn-specific key is always present (auto-generated on first run).
 func sshAuthMethods() []ssh.AuthMethod {
-	var methods []ssh.AuthMethod
-	var agentClient agent.ExtendedAgent
+	signer, err := ensureTavrnKey()
+	if err != nil {
+		log.Fatalf("identity key: %v", err)
+	}
+	return []ssh.AuthMethod{ssh.PublicKeys(signer)}
+}
 
-	// Connect to SSH agent if available.
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		conn, err := net.Dial("unix", sock)
-		if err == nil {
-			agentClient = agent.NewClient(conn)
+// ensureTavrnKey loads or creates a persistent identity key at
+// ~/.config/tavrn/id_ed25519. The key is created silently on first run.
+func ensureTavrnKey() (ssh.Signer, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	keyPath := filepath.Join(home, ".config", "tavrn", "id_ed25519")
+
+	// Load existing key.
+	if data, err := os.ReadFile(keyPath); err == nil {
+		if key, err := ssh.ParseRawPrivateKey(data); err == nil {
+			if signer, err := ssh.NewSignerFromKey(key); err == nil {
+				return signer, nil
+			}
 		}
 	}
 
-	// Load key files from disk and add to agent automatically.
-	home, _ := os.UserHomeDir()
-	keyFiles := []string{
-		filepath.Join(home, ".ssh", "id_ed25519"),
-		filepath.Join(home, ".ssh", "id_rsa"),
-		filepath.Join(home, ".ssh", "id_ecdsa"),
-	}
-	for _, path := range keyFiles {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		key, err := ssh.ParseRawPrivateKey(data)
-		if err != nil {
-			continue
-		}
-
-		if agentClient != nil {
-			agentClient.Add(agent.AddedKey{PrivateKey: key})
-		}
-
-		signer, err := ssh.NewSignerFromKey(key)
-		if err != nil {
-			continue
-		}
-		methods = append(methods, ssh.PublicKeys(signer))
+	// Generate a fresh ed25519 key.
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("generate key: %w", err)
 	}
 
-	if agentClient != nil {
-		methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
+	pemBlock, err := ssh.MarshalPrivateKey(priv, "")
+	if err != nil {
+		return nil, fmt.Errorf("marshal key: %w", err)
 	}
 
-	return methods
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+		return nil, fmt.Errorf("create config dir: %w", err)
+	}
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(pemBlock), 0600); err != nil {
+		return nil, fmt.Errorf("write key: %w", err)
+	}
+
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		return nil, fmt.Errorf("signer: %w", err)
+	}
+	return signer, nil
 }
 
 func runUpdate() error {
