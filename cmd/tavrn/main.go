@@ -236,7 +236,11 @@ func updateEnv() []string {
 }
 
 func runCommand(dir string, env []string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	resolved, err := resolveCommand(name, env)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(resolved, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.Stdout = os.Stdout
@@ -245,7 +249,11 @@ func runCommand(dir string, env []string, name string, args ...string) error {
 }
 
 func commandOutput(dir string, env []string, name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+	resolved, err := resolveCommand(name, env)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(resolved, args...)
 	cmd.Dir = dir
 	cmd.Env = env
 	var stdout bytes.Buffer
@@ -259,6 +267,36 @@ func commandOutput(dir string, env []string, name string, args ...string) (strin
 		return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func resolveCommand(name string, env []string) (string, error) {
+	if strings.Contains(name, "/") {
+		return name, nil
+	}
+
+	pathEnv := os.Getenv("PATH")
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			pathEnv = strings.TrimPrefix(kv, "PATH=")
+			break
+		}
+	}
+
+	for _, dir := range filepath.SplitList(pathEnv) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := filepath.Join(dir, name)
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		if info.Mode()&0111 != 0 {
+			return candidate, nil
+		}
+	}
+
+	return "", fmt.Errorf("exec: %q not found in PATH", name)
 }
 
 func startPurgeScheduler(st *store.Store, h *hub.Hub) {
