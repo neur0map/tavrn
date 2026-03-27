@@ -25,9 +25,22 @@ func (t TopBar) View() string {
 		return ""
 	}
 
-	// Line 1: Static diagonal fill bar
-	fill := strings.Repeat("╱", t.Width)
-	diagLine := lipgloss.NewStyle().Foreground(ColorBorder).Render(fill)
+	// Line 1: Diagonal fill with TAVRN.SH embedded
+	label := " TAVRN.SH "
+	fillTotal := t.Width - len(label)
+	leftN := fillTotal / 2
+	rightN := fillTotal - leftN
+	if leftN < 0 {
+		leftN = 0
+	}
+	if rightN < 0 {
+		rightN = 0
+	}
+	diagFill := lipgloss.NewStyle().Foreground(ColorBorder)
+	diagTitle := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
+	diagLine := diagFill.Render(strings.Repeat("╱", leftN)) +
+		diagTitle.Render(label) +
+		diagFill.Render(strings.Repeat("╱", rightN))
 
 	// Line 2: Stats left, title center, room right
 	onlineDot := lipgloss.NewStyle().Foreground(ColorGreen).Render("●")
