@@ -42,6 +42,7 @@ type Engine struct {
 	userVoted     map[string]string   // fingerprint -> trackID they voted for
 	backends      []MusicBackend
 	onStateChange OnStateChange
+	onTrackChange func(Track)
 	listeners     int
 }
 
@@ -58,6 +59,12 @@ func (e *Engine) SetOnStateChange(fn OnStateChange) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onStateChange = fn
+}
+
+func (e *Engine) SetOnTrackChange(fn func(Track)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.onTrackChange = fn
 }
 
 func (e *Engine) SetListeners(n int) {
@@ -190,6 +197,7 @@ func (e *Engine) StartPlaying(track Track) {
 	e.phase = PhasePlaying
 
 	e.notifyChange()
+	e.notifyTrackChange(track)
 }
 
 func (e *Engine) FinishTrack() *Track {
@@ -206,6 +214,7 @@ func (e *Engine) FinishTrack() *Track {
 		e.current = winner
 		e.playStart = time.Now()
 		e.phase = PhasePlaying
+		e.notifyTrackChange(*winner)
 	} else {
 		e.phase = PhaseIdle
 		e.current = nil
@@ -256,6 +265,7 @@ func (e *Engine) tick() {
 			e.current = winner
 			e.playStart = time.Now()
 			e.phase = PhasePlaying
+			e.notifyTrackChange(*winner)
 		} else {
 			e.current = nil
 			e.phase = PhaseIdle
@@ -281,6 +291,7 @@ func (e *Engine) tryAutoPlay() {
 		e.playStart = time.Now()
 		e.phase = PhasePlaying
 		e.notifyChange()
+		e.notifyTrackChange(pick)
 		return
 	}
 }
@@ -329,5 +340,11 @@ func (e *Engine) pickWinnerLocked() *Track {
 func (e *Engine) notifyChange() {
 	if e.onStateChange != nil {
 		e.onStateChange()
+	}
+}
+
+func (e *Engine) notifyTrackChange(track Track) {
+	if e.onTrackChange != nil {
+		go e.onTrackChange(track)
 	}
 }

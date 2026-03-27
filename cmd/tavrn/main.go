@@ -86,6 +86,10 @@ func runServer() {
 		log.Printf("Jamendo backend enabled")
 	}
 	jukeboxEngine := jukebox.NewEngine(backends)
+	streamer := jukebox.NewStreamer()
+	jukeboxEngine.SetOnTrackChange(func(track jukebox.Track) {
+		streamer.StreamTrack(track)
+	})
 
 	srv, err := server.New(server.Config{
 		Host:          "0.0.0.0",
@@ -94,6 +98,7 @@ func runServer() {
 		Store:         st,
 		Hub:           h,
 		JukeboxEngine: jukeboxEngine,
+		Streamer:      streamer,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)

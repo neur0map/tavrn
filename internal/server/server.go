@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/ssh"
+	gossh "golang.org/x/crypto/ssh"
 	"charm.land/wish/v2"
 	bm "charm.land/wish/v2/bubbletea"
 	lm "charm.land/wish/v2/elapsed"
@@ -29,6 +30,7 @@ type Config struct {
 	Store         *store.Store
 	Hub           *hub.Hub
 	JukeboxEngine *jukebox.Engine
+	Streamer      *jukebox.Streamer
 }
 
 type Server struct {
@@ -54,6 +56,14 @@ func New(cfg Config) (*Server, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("wish server: %w", err)
+	}
+
+	// Register custom audio channel handler alongside the default session handler
+	if cfg.Streamer != nil {
+		ws.ChannelHandlers = map[string]ssh.ChannelHandler{
+			"session":     ssh.DefaultSessionHandler,
+			"tavrn-audio": s.audioChannelHandler,
+		}
 	}
 
 	s.wish = ws
@@ -165,4 +175,19 @@ func (s *Server) Shutdown(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return s.wish.Shutdown(ctx)
+}
+
+func (s *Server) audioChannelHandler(srv *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewChannel, ctx ssh.Context) {
+	ch, reqs, err := newChan.Accept()
+	if err != nil {
+		return
+	}
+	go gossh.DiscardRequests(reqs)
+
+	s.cfg.Streamer.AddConn(ch)
+
+	// Block until connection closes
+	<-ctx.Done()
+	s.cfg.Streamer.RemoveConn(ch)
+	ch.Close()
 }
