@@ -162,8 +162,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.switchRoom("gallery")
 		}
 		text := msg.Text
-		if len(text) > 60 {
-			text = text[:60]
+		if len(text) > 280 {
+			text = text[:280]
 		}
 		x, y := a.gallery.RandomPosition()
 		noteID, err := a.store.CreateNote(x, y, text, a.session.Fingerprint, a.session.Nickname, a.session.ColorIndex)

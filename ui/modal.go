@@ -342,7 +342,7 @@ func NewPostModal() PostModal {
 	ti := textinput.New()
 	ti.Placeholder = "write something on the board..."
 	ti.Focus()
-	ti.CharLimit = 60
+	ti.CharLimit = 280
 	ti.Prompt = "> "
 	return PostModal{input: ti}
 }
@@ -382,7 +382,7 @@ func (p PostModal) View(width, height int) string {
 	var b3 strings.Builder
 	b3.WriteString(header)
 	b3.WriteString("\n\n")
-	b3.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render("  Leave a note on the board (60 chars max)"))
+	b3.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render("  Leave a note on the board (280 chars max)"))
 	b3.WriteString("\n\n")
 	b3.WriteString("  " + p.input.View())
 
@@ -426,8 +426,9 @@ func NewExpandNoteModal(text, nick string, colorIdx int, isOwn bool, noteID int)
 }
 
 func (e ExpandNoteModal) View(width, height int) string {
+	modalW := 56
 	headerText := " Note "
-	fillLen := 44 - len(headerText)
+	fillLen := modalW - len(headerText)
 	if fillLen < 4 {
 		fillLen = 4
 	}
@@ -452,8 +453,9 @@ func (e ExpandNoteModal) View(width, height int) string {
 	b4.WriteString("  " + nickStyled)
 	b4.WriteString("\n\n")
 
-	// Full text with word wrapping
-	wrapped := wordWrap(e.Text, 40)
+	// Full text with word wrapping — wider for readability
+	wrapWidth := modalW - 6
+	wrapped := wordWrap(e.Text, wrapWidth)
 	for _, line := range wrapped {
 		b4.WriteString("  " + line + "\n")
 	}
@@ -461,7 +463,7 @@ func (e ExpandNoteModal) View(width, height int) string {
 	// Footer
 	b4.WriteString("\n")
 	footerFill := lipgloss.NewStyle().Foreground(ColorBorder).Render(
-		strings.Repeat("╱", 44))
+		strings.Repeat("╱", modalW))
 	b4.WriteString(footerFill)
 	b4.WriteString("\n")
 
