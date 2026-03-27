@@ -51,12 +51,13 @@ type App struct {
 	gallery GalleryView
 
 	// Modal
-	modal           ModalType
-	helpModal       HelpModal
-	nickModal       NickModal
-	joinRoomModal   JoinRoomModal
-	postModal       PostModal
-	expandNoteModal ExpandNoteModal
+	modal             ModalType
+	helpModal         HelpModal
+	nickModal         NickModal
+	joinRoomModal     JoinRoomModal
+	postModal         PostModal
+	expandNoteModal   ExpandNoteModal
+	adminConfirmModal AdminConfirmModal
 
 	// Transition animation
 	transSpring harmonica.Spring
@@ -185,6 +186,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			},
 			Fingerprint: a.session.Fingerprint,
 		})
+		return a, nil
+
+	case AdminConfirmMsg:
+		a.modal = ModalNone
+		// Parse action: "purge" or "ban <args>"
+		parts := strings.SplitN(msg.Action, " ", 2)
+		cmd := parts[0]
+		args := ""
+		if len(parts) > 1 {
+			args = parts[1]
+		}
+		result, err := a.admin.HandleCommand(a.session.Fingerprint, cmd, args)
+		if err != nil {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Error: "+err.Error()))
+			return a, nil
+		}
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, result))
+		if cmd == "purge" {
+			a.onSend(session.Msg{Type: session.MsgPurge, Room: a.session.Room})
+		}
 		return a, nil
 
 	case GalleryExpandMsg:
@@ -363,6 +384,10 @@ func (a App) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.postModal, cmd = a.postModal.Update(msg)
 		return a, cmd
+	case ModalAdminConfirm:
+		var cmd tea.Cmd
+		a.adminConfirmModal, cmd = a.adminConfirmModal.Update(msg)
+		return a, cmd
 	case ModalExpandNote:
 		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 			if keyMsg.String() == "d" && a.expandNoteModal.IsOwn {
@@ -445,27 +470,52 @@ func (a App) handleInput() (tea.Model, tea.Cmd) {
 
 func (a *App) handleCommand(parsed chat.ParseResult) {
 	switch parsed.Command {
-	// Hidden admin commands only
-	case "ban", "unban", "purge":
+	case "ban":
 		if !a.session.IsAdmin {
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
-				"Use F1 for help with keybinds."))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use F1 for help with keybinds."))
 			return
 		}
-		result, err := a.admin.HandleCommand(
-			a.session.Fingerprint, parsed.Command, parsed.Args)
+		if parsed.Args == "" {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Usage: /ban <fingerprint> [duration]"))
+			return
+		}
+		a.modal = ModalAdminConfirm
+		a.adminConfirmModal = NewAdminConfirmModal(
+			"ban "+parsed.Args,
+			"Ban user "+parsed.Args+"?")
+
+	case "unban":
+		if !a.session.IsAdmin {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use F1 for help with keybinds."))
+			return
+		}
+		// Unban is safe, no confirm needed
+		result, err := a.admin.HandleCommand(a.session.Fingerprint, "unban", parsed.Args)
 		if err != nil {
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
-				"Error: "+err.Error()))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Error: "+err.Error()))
 			return
 		}
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, result))
-		if parsed.Command == "purge" {
-			a.onSend(session.Msg{Type: session.MsgPurge, Room: a.session.Room})
+
+	case "purge":
+		if !a.session.IsAdmin {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use F1 for help with keybinds."))
+			return
 		}
+		a.modal = ModalAdminConfirm
+		a.adminConfirmModal = NewAdminConfirmModal(
+			"purge",
+			"PURGE ALL DATA? This wipes everything.")
+
+	case "fp":
+		// Show your fingerprint (admin debug)
+		if a.session.IsAdmin {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				"Your fingerprint: "+a.session.Fingerprint))
+		}
+
 	default:
-		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
-			"Use F1 for help with keybinds."))
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use F1 for help with keybinds."))
 	}
 }
 
@@ -674,6 +724,8 @@ func (a App) View() tea.View {
 			modalBox = a.postModal.View(a.width, a.height)
 		case ModalExpandNote:
 			modalBox = a.expandNoteModal.View(a.width, a.height)
+		case ModalAdminConfirm:
+			modalBox = a.adminConfirmModal.View(a.width, a.height)
 		}
 		base = Overlay(base, modalBox, a.width, a.height)
 	}

@@ -19,6 +19,7 @@ const (
 	ModalJoinRoom
 	ModalPost
 	ModalExpandNote
+	ModalAdminConfirm
 )
 
 // CloseModalMsg signals modal should close.
@@ -489,4 +490,67 @@ func (e ExpandNoteModal) View(width, height int) string {
 		BorderForeground(borderColor).
 		Padding(1, 2).
 		Render(b4.String())
+}
+
+// ─────────────────────────────────────
+// Admin Confirm Modal
+// ─────────────────────────────────────
+
+type AdminConfirmMsg struct{ Action string }
+
+type AdminConfirmModal struct {
+	Action  string // "purge", "ban <fp>", etc
+	Message string
+}
+
+func NewAdminConfirmModal(action, message string) AdminConfirmModal {
+	return AdminConfirmModal{Action: action, Message: message}
+}
+
+func (a AdminConfirmModal) Update(msg tea.Msg) (AdminConfirmModal, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "y":
+			action := a.Action
+			return a, func() tea.Msg { return AdminConfirmMsg{Action: action} }
+		case "n", "esc":
+			return a, func() tea.Msg { return CloseModalMsg{} }
+		}
+	}
+	return a, nil
+}
+
+func (a AdminConfirmModal) View(width, height int) string {
+	warn := lipgloss.NewStyle().Foreground(lipgloss.Color("131")).Bold(true)
+	dim := lipgloss.NewStyle().Foreground(ColorDim)
+
+	var b5 strings.Builder
+
+	headerText := " ADMIN "
+	fillLen := 40 - len(headerText)
+	leftFill := strings.Repeat("╱", fillLen/2)
+	rightFill := strings.Repeat("╱", fillLen-fillLen/2)
+	b5.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("131")).Render(leftFill))
+	b5.WriteString(warn.Render(headerText))
+	b5.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("131")).Render(rightFill))
+	b5.WriteString("\n\n")
+
+	b5.WriteString("  " + warn.Render(a.Message))
+	b5.WriteString("\n\n")
+	b5.WriteString("  " + dim.Render("This action cannot be undone."))
+
+	b5.WriteString("\n\n")
+	b5.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("131")).Render(
+		strings.Repeat("╱", 40)))
+	b5.WriteString("\n")
+
+	y := lipgloss.NewStyle().Foreground(lipgloss.Color("108")).Bold(true).Render("Y")
+	n := lipgloss.NewStyle().Foreground(lipgloss.Color("131")).Bold(true).Render("N")
+	b5.WriteString(dim.Render(fmt.Sprintf("  %s confirm  ·  %s cancel", y, n)))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("131")).
+		Padding(1, 2).
+		Render(b5.String())
 }

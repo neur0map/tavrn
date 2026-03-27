@@ -72,6 +72,8 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 	hash := sha256.Sum256(pubKey.Marshal())
 	fingerprint := hex.EncodeToString(hash[:])
 
+	log.Printf("connect: %s (admin=%v)", fingerprint[:16], fingerprint == s.cfg.AdminFingerprint)
+
 	banned, err := s.cfg.Store.IsBanned(fingerprint)
 	if err != nil {
 		log.Printf("ban check error: %v", err)
