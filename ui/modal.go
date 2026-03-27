@@ -79,15 +79,29 @@ func (h HelpModal) View(width, height int) string {
 	b.WriteString(cat.Render("KEYS"))
 	b.WriteString("\n")
 	keys := []struct{ k, d string }{
-		{"CTRL+J", "switch rooms"},
-		{"CTRL+P", "post note (#gallery)"},
-		{"CTRL+N", "change nickname"},
-		{"CTRL+H", "this help"},
-		{"CTRL+C", "exit tavern"},
+		{"F1 or ?", "this help"},
+		{"F2", "change nickname"},
+		{"F3", "switch rooms"},
+		{"F4", "post note"},
 		{"ESC", "close modal"},
 		{"SHIFT+arrows", "scroll chat"},
 	}
 	for _, k := range keys {
+		b.WriteString(fmt.Sprintf("  %s  %s\n", cmd.Width(18).Render(k.k), desc.Render(k.d)))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(cat.Render("GALLERY KEYS"))
+	b.WriteString("\n")
+	gkeys := []struct{ k, d string }{
+		{"P", "post note"},
+		{"J", "switch rooms"},
+		{"H", "help"},
+		{"D", "delete your note"},
+		{"TAB", "cycle selection"},
+		{"click + drag", "move your notes"},
+	}
+	for _, k := range gkeys {
 		b.WriteString(fmt.Sprintf("  %s  %s\n", cmd.Width(18).Render(k.k), desc.Render(k.d)))
 	}
 

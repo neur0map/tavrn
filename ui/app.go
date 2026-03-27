@@ -231,18 +231,20 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.updateModal(msg)
 	}
 
-	// Global keybinds (work in any room, any state)
+	// Global keybinds — F-keys and ctrl sequences safe for SSH
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
-		case "ctrl+p":
-			a.modal = ModalPost
-			a.postModal = NewPostModal()
-			return a, nil
-		case "ctrl+n":
+		case "f1", "?":
+			if a.session.Room == "gallery" || !a.chat.HasInput() {
+				a.modal = ModalHelp
+				a.helpModal = NewHelpModal()
+				return a, nil
+			}
+		case "f2":
 			a.modal = ModalNick
 			a.nickModal = NewNickModal(a.session.Nickname)
 			return a, nil
-		case "ctrl+j":
+		case "f3":
 			var counts []int
 			for _, rName := range room.All {
 				counts = append(counts, len(a.hub.Sessions(rName)))
@@ -250,22 +252,42 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.modal = ModalJoinRoom
 			a.joinRoomModal = NewJoinRoomModal(room.All, counts, a.session.Room)
 			return a, nil
-		case "ctrl+h":
-			a.modal = ModalHelp
-			a.helpModal = NewHelpModal()
+		case "f4":
+			a.modal = ModalPost
+			a.postModal = NewPostModal()
 			return a, nil
 		}
 	}
 
-	// Gallery room: route mouse events to gallery
+	// Gallery room: single-key shortcuts + mouse
 	if a.session.Room == "gallery" {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
 			switch msg.String() {
-			case "ctrl+c":
+			case "ctrl+c", "q":
 				return a, tea.Quit
 			case "enter":
 				return a.handleInput()
+			case "p":
+				a.modal = ModalPost
+				a.postModal = NewPostModal()
+				return a, nil
+			case "n":
+				a.modal = ModalNick
+				a.nickModal = NewNickModal(a.session.Nickname)
+				return a, nil
+			case "j":
+				var counts []int
+				for _, rName := range room.All {
+					counts = append(counts, len(a.hub.Sessions(rName)))
+				}
+				a.modal = ModalJoinRoom
+				a.joinRoomModal = NewJoinRoomModal(room.All, counts, a.session.Room)
+				return a, nil
+			case "h":
+				a.modal = ModalHelp
+				a.helpModal = NewHelpModal()
+				return a, nil
 			}
 			// Forward d/delete/tab to gallery
 			if msg.String() == "d" || msg.String() == "delete" || msg.String() == "backspace" || msg.String() == "tab" {
@@ -622,6 +644,7 @@ func (a *App) doLayout() {
 
 	a.topBar.Width = a.width
 	a.bottomBar.Width = a.width
+	a.bottomBar.IsGallery = (a.session.Room == "gallery")
 	a.rooms.Width = roomsWidth
 	a.rooms.Height = mainHeight
 	a.online.Width = onlineWidth
