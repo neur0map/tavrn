@@ -271,8 +271,8 @@ func (s Splash) renderCard() string {
 	title := GradientText("TAVRN.SH", pair[1], pair[0], true)
 	b.WriteString(centerText(title, 8, 44))
 	b.WriteString("\n")
-	sub := SplashSubtitleStyle.Render("a quiet place in the terminal")
-	b.WriteString(centerText(sub, 29, 44))
+	sub := SplashSubtitleStyle.Render("where strangers become regulars")
+	b.WriteString(centerText(sub, 30, 44))
 	b.WriteString("\n\n")
 
 	// Render art in a single color to preserve monospace alignment
