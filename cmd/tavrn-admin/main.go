@@ -184,13 +184,13 @@ func runUpdate(restartServer bool) error {
 		return err
 	}
 
-	fmt.Println("Building tavrn...")
-	if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn", "./cmd/tavrn"); err != nil {
+	fmt.Println("Building tavrn-client...")
+	if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn-client", "./cmd/tavrn"); err != nil {
 		return err
 	}
 	if restartServer {
-		fmt.Println("Building tavrn-admin...")
-		if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn-admin", "./cmd/tavrn-admin"); err != nil {
+		fmt.Println("Building tavrn...")
+		if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn", "./cmd/tavrn-admin"); err != nil {
 			return err
 		}
 
