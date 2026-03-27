@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -17,6 +18,9 @@ import (
 // HubMsg wraps a session.Msg for the Bubble Tea message loop.
 type HubMsg session.Msg
 
+// tickMsg fires every 500ms for animations and timestamp refresh.
+type tickMsg time.Time
+
 type appState int
 
 const (
@@ -25,19 +29,20 @@ const (
 )
 
 type App struct {
-	state     appState
-	splash    Splash
-	session   *session.Session
-	chat      ChatView
-	topBar    TopBar
-	bottomBar BottomBar
-	sidebar   Sidebar
-	width     int
-	height    int
-	store     *store.Store
-	hub       *hub.Hub
-	admin     *admin.Admin
-	onSend    func(session.Msg)
+	state          appState
+	splash         Splash
+	session        *session.Session
+	chat           ChatView
+	topBar         TopBar
+	bottomBar      BottomBar
+	sidebar        Sidebar
+	width          int
+	height         int
+	store          *store.Store
+	hub            *hub.Hub
+	admin          *admin.Admin
+	onSend         func(session.Msg)
+	lastTypingSent time.Time
 }
 
 func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, adm *admin.Admin, onSend func(session.Msg)) App {
@@ -56,7 +61,6 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, adm *admin.Admin
 	}
 }
 
-// WaitForHubMsg returns a tea.Cmd that waits for the next hub message.
 func WaitForHubMsg(ch <-chan session.Msg) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
@@ -67,8 +71,17 @@ func WaitForHubMsg(ch <-chan session.Msg) tea.Cmd {
 	}
 }
 
+func doTick() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
 func (a App) Init() tea.Cmd {
-	return WaitForHubMsg(a.session.Send)
+	return tea.Batch(
+		WaitForHubMsg(a.session.Send),
+		doTick(),
+	)
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -84,12 +97,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case tickMsg:
+		a.topBar.Frame++
+		a.chat.Tick()
+		return a, doTick()
+
 	case EnterTavernMsg:
 		a.state = stateTavern
 		a.doLayout()
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
 			"Welcome to the tavern. Type /help for commands."))
-		return a, WaitForHubMsg(a.session.Send)
+		return a, nil
 
 	case HubMsg:
 		a.handleHubMsg(session.Msg(msg))
@@ -103,7 +121,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// Tavern state
+	// Tavern state input handling
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -111,6 +129,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "enter":
 			return a.handleInput()
+		default:
+			// Broadcast typing notification (throttled to once per 2s)
+			if time.Since(a.lastTypingSent) > 2*time.Second && a.chat.HasInput() {
+				a.lastTypingSent = time.Now()
+				a.onSend(session.Msg{
+					Type:     session.MsgTyping,
+					Nickname: a.session.Nickname,
+					Room:     a.session.Room,
+				})
+			}
 		}
 	}
 
@@ -145,7 +173,8 @@ func (a App) handleInput() (tea.Model, tea.Cmd) {
 			})
 		} else {
 			a.session.ChatLimiter.RecordViolation()
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Slow down! You're sending too fast."))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				"Slow down! You're sending too fast."))
 		}
 	}
 
@@ -156,10 +185,10 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 	switch parsed.Command {
 	case "help":
 		help := "Commands:\n" +
-			"  /nick <name>  - change your nickname\n" +
-			"  /who          - see who's around\n" +
-			"  /help         - show this help\n\n" +
-			"All data - nicknames, canvas, chat, identities, votes -\n" +
+			"  /nick <name>  — change your nickname\n" +
+			"  /who          — see who's around\n" +
+			"  /help         — show this help\n\n" +
+			"All data — nicknames, canvas, chat, identities, votes —\n" +
 			"is purged every Sunday at 23:59 UTC.\n" +
 			"Nothing is permanent. Draw while you can."
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, help))
@@ -188,7 +217,8 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 			return
 		}
 		if err := a.store.SetNickname(a.session.Fingerprint, cleaned); err != nil {
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "That name is already claimed."))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				"That name is already claimed."))
 			return
 		}
 		oldNick := a.session.Nickname
@@ -201,12 +231,15 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 
 	case "ban", "unban", "purge":
 		if !a.session.IsAdmin {
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Unknown command: /"+parsed.Command))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				"Unknown command: /"+parsed.Command))
 			return
 		}
-		result, err := a.admin.HandleCommand(a.session.Fingerprint, parsed.Command, parsed.Args)
+		result, err := a.admin.HandleCommand(
+			a.session.Fingerprint, parsed.Command, parsed.Args)
 		if err != nil {
-			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Error: "+err.Error()))
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				"Error: "+err.Error()))
 			return
 		}
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, result))
@@ -215,7 +248,8 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 		}
 
 	default:
-		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Unknown command: /"+parsed.Command))
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+			"Unknown command: /"+parsed.Command))
 	}
 }
 
@@ -227,34 +261,40 @@ func (a *App) handleHubMsg(msg session.Msg) {
 			ColorIndex: msg.ColorIndex,
 			Text:       msg.Text,
 			Room:       msg.Room,
+			Timestamp:  time.Now(),
 		})
 	case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
 		a.chat.AddMessage(chat.NewSystemMessage(msg.Room, msg.Text))
 	case session.MsgPurge:
-		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "The tavern has been swept clean."))
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+			"The tavern has been swept clean."))
+	case session.MsgTyping:
+		// Don't show your own typing
+		if msg.Nickname != a.session.Nickname {
+			a.chat.SetTyping(msg.Nickname)
+		}
 	}
 }
 
 func (a *App) doLayout() {
-	sidebarWidth := 24
-	if a.width < 70 {
+	sidebarWidth := 26
+	if a.width < 80 {
 		sidebarWidth = 0
 	}
 	mainWidth := a.width - sidebarWidth
 
-	topBarHeight := 1
-	bottomBarHeight := 1
+	topBarHeight := 3 // brand + stats + border
+	bottomBarHeight := 2
 	mainHeight := a.height - topBarHeight - bottomBarHeight
-	if mainHeight < 4 {
-		mainHeight = 4
+	if mainHeight < 6 {
+		mainHeight = 6
 	}
-	chatHeight := mainHeight
 
 	a.topBar.Width = a.width
 	a.bottomBar.Width = a.width
 	a.sidebar.Width = sidebarWidth
 	a.sidebar.Height = mainHeight
-	a.chat.SetSize(mainWidth, chatHeight)
+	a.chat.SetSize(mainWidth, mainHeight)
 }
 
 func (a App) View() tea.View {
@@ -286,8 +326,8 @@ func (a App) View() tea.View {
 	a.sidebar.OnlineUsers = onlineNames
 	a.sidebar.Rooms = []RoomInfo{{Name: "lounge", Count: a.hub.OnlineCount()}}
 
-	sidebarWidth := 24
-	if a.width < 70 {
+	sidebarWidth := 26
+	if a.width < 80 {
 		sidebarWidth = 0
 	}
 

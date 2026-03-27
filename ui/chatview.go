@@ -12,37 +12,46 @@ import (
 	"tavrn/internal/chat"
 )
 
+// Typing dots animation frames
+var typingFrames = []string{"   ", ".  ", ".. ", "..."}
+
 type ChatView struct {
-	viewport viewport.Model
-	input    textinput.Model
-	messages []chat.Message
-	width    int
-	height   int
+	viewport    viewport.Model
+	input       textinput.Model
+	messages    []chat.Message
+	typingUsers map[string]time.Time // nick → last typing time
+	typingFrame int
+	width       int
+	height      int
 }
 
 func NewChatView() ChatView {
 	ti := textinput.New()
-	ti.Placeholder = "say something..."
+	ti.Placeholder = "Type your message..."
 	ti.Focus()
 	ti.CharLimit = 500
-	ti.Prompt = "> "
+	ti.Prompt = "  → > "
 
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(10))
 
 	return ChatView{
-		viewport: vp,
-		input:    ti,
-		messages: make([]chat.Message, 0),
+		viewport:    vp,
+		input:       ti,
+		messages:    make([]chat.Message, 0),
+		typingUsers: make(map[string]time.Time),
 	}
 }
 
 func (c *ChatView) SetSize(width, height int) {
 	c.width = width
 	c.height = height
-	inputHeight := 3 // prompt line + top/bottom padding
+	typingHeight := 1
+	inputHeight := 1
+	sepHeight := 1
 	borderHeight := 2
-	vpW := width - borderHeight - 2 // border + padding
-	vpH := height - inputHeight - borderHeight
+	padHeight := 2
+	vpW := width - borderHeight - 2
+	vpH := height - inputHeight - sepHeight - typingHeight - borderHeight - padHeight
 	if vpW < 1 {
 		vpW = 1
 	}
@@ -51,11 +60,10 @@ func (c *ChatView) SetSize(width, height int) {
 	}
 	c.viewport.SetWidth(vpW)
 	c.viewport.SetHeight(vpH)
-	c.input.SetWidth(width - 6)
+	c.input.SetWidth(width - 10)
 }
 
 func (c *ChatView) AddMessage(msg chat.Message) {
-	// Ensure timestamp is set
 	if msg.Timestamp.IsZero() {
 		msg.Timestamp = time.Now()
 	}
@@ -64,55 +72,80 @@ func (c *ChatView) AddMessage(msg chat.Message) {
 	c.viewport.GotoBottom()
 }
 
+func (c *ChatView) SetTyping(nick string) {
+	c.typingUsers[nick] = time.Now()
+}
+
+func (c *ChatView) ClearStaleTyping() {
+	now := time.Now()
+	for k, t := range c.typingUsers {
+		if now.Sub(t) > 3*time.Second {
+			delete(c.typingUsers, k)
+		}
+	}
+}
+
+func (c *ChatView) Tick() {
+	c.typingFrame++
+	c.ClearStaleTyping()
+	// Re-render to update relative timestamps
+	c.renderMessages()
+}
+
 func (c *ChatView) renderMessages() {
 	var lines []string
+	now := time.Now()
 
+	prevNick := ""
 	for i, msg := range c.messages {
 		if msg.IsSystem {
-			// System messages: dimmed with star
-			line := SystemMsgStyle.Render("  * " + msg.Text)
-			lines = append(lines, line)
-			// Add spacing after system messages
+			// System messages: dimmed, centered feel
+			sysText := lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render(
+				"    " + msg.Text)
+			lines = append(lines, sysText)
 			if i < len(c.messages)-1 {
 				lines = append(lines, "")
 			}
-		} else {
-			// User messages: Crush-style with colored left bar
-			barColor := NickBarColor(msg.ColorIndex)
-			bar := lipgloss.NewStyle().Foreground(barColor).Render("  |")
-			barDim := lipgloss.NewStyle().Foreground(barColor).Render("  |")
+			prevNick = ""
+			continue
+		}
 
-			// Header line: bar  nick  timestamp
+		// Discord-style: group consecutive messages from same user
+		sameUser := msg.Nickname == prevNick
+		prevNick = msg.Nickname
+
+		if !sameUser {
+			// Add spacing before new user block (except first message)
+			if i > 0 {
+				lines = append(lines, "")
+			}
+
+			// Nick + timestamp header
 			nick := NickStyle(msg.ColorIndex).Render(msg.Nickname)
-			ts := formatTimestamp(msg.Timestamp)
+			ts := formatTimestamp(msg.Timestamp, now)
 			timeStr := MsgTimeStyle.Render(ts)
-			header := fmt.Sprintf("%s %s  %s", bar, nick, timeStr)
+			header := fmt.Sprintf("    %s  %s", nick, timeStr)
 			lines = append(lines, header)
+		}
 
-			// Body line(s): bar  message text
-			// Word-wrap long messages
-			msgLines := wordWrap(msg.Text, c.viewport.Width()-6)
-			for _, ml := range msgLines {
-				body := fmt.Sprintf("%s %s", barDim, ml)
-				lines = append(lines, body)
-			}
-
-			// Spacing between messages
-			if i < len(c.messages)-1 {
-				lines = append(lines, "")
-			}
+		// Message body — indented under nick
+		msgLines := wordWrap(msg.Text, c.viewport.Width()-8)
+		for _, ml := range msgLines {
+			body := "      " + ml
+			lines = append(lines, body)
 		}
 	}
 	c.viewport.SetContent(strings.Join(lines, "\n"))
 }
 
-func formatTimestamp(t time.Time) string {
-	now := time.Now()
+func formatTimestamp(t time.Time, now time.Time) string {
 	diff := now.Sub(t)
 
 	switch {
-	case diff < time.Minute:
+	case diff < 10*time.Second:
 		return "just now"
+	case diff < time.Minute:
+		return fmt.Sprintf("%ds ago", int(diff.Seconds()))
 	case diff < time.Hour:
 		mins := int(diff.Minutes())
 		if mins == 1 {
@@ -127,13 +160,9 @@ func formatTimestamp(t time.Time) string {
 }
 
 func wordWrap(text string, width int) []string {
-	if width <= 0 {
+	if width <= 0 || len(text) <= width {
 		return []string{text}
 	}
-	if len(text) <= width {
-		return []string{text}
-	}
-
 	var lines []string
 	words := strings.Fields(text)
 	current := ""
@@ -169,14 +198,53 @@ func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
 func (c ChatView) View() string {
 	chatContent := c.viewport.View()
 
-	// Input area with separator line
-	sep := lipgloss.NewStyle().Foreground(ColorBorder).
-		Width(c.width - 4).
-		Render(strings.Repeat("─", c.width-6))
-	inputLine := "  " + c.input.View()
+	// Typing indicator
+	typingLine := c.renderTypingIndicator()
 
-	inner := lipgloss.JoinVertical(lipgloss.Left, chatContent, sep, inputLine)
-	return ChatBorderStyle.Width(c.width).Height(c.height).Padding(0, 1).Render(inner)
+	// Separator
+	sepWidth := c.width - 6
+	if sepWidth < 1 {
+		sepWidth = 1
+	}
+	sep := lipgloss.NewStyle().Foreground(ColorDimmer).
+		Render("  " + strings.Repeat("─", sepWidth))
+
+	// Input
+	inputLine := c.input.View()
+
+	inner := lipgloss.JoinVertical(lipgloss.Left,
+		chatContent,
+		typingLine,
+		sep,
+		inputLine,
+	)
+	return ChatBorderStyle.Width(c.width).Height(c.height).Padding(1, 0).Render(inner)
+}
+
+func (c ChatView) renderTypingIndicator() string {
+	c.ClearStaleTyping()
+
+	if len(c.typingUsers) == 0 {
+		return "  " // keep the line height consistent
+	}
+
+	var names []string
+	for nick := range c.typingUsers {
+		names = append(names, nick)
+	}
+
+	dots := typingFrames[c.typingFrame%len(typingFrames)]
+	var text string
+	switch len(names) {
+	case 1:
+		text = fmt.Sprintf("%s is typing%s", names[0], dots)
+	case 2:
+		text = fmt.Sprintf("%s and %s are typing%s", names[0], names[1], dots)
+	default:
+		text = fmt.Sprintf("%d people are typing%s", len(names), dots)
+	}
+
+	return TypingStyle.Render("    " + text)
 }
 
 // InputValue returns current input text and clears it.
@@ -184,4 +252,9 @@ func (c *ChatView) InputValue() string {
 	val := c.input.Value()
 	c.input.Reset()
 	return val
+}
+
+// HasInput returns true if the user has typed something.
+func (c *ChatView) HasInput() bool {
+	return c.input.Value() != ""
 }

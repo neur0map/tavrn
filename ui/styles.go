@@ -6,12 +6,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Cantina palette — ANSI 256 colors for max terminal compatibility.
+// Cantina palette — ANSI 256 colors.
 var (
 	ColorBackground = lipgloss.Color("235")
 	ColorDarkBg     = lipgloss.Color("233")
+	ColorPanelBg    = lipgloss.Color("234")
 	ColorSand       = lipgloss.Color("180")
 	ColorDim        = lipgloss.Color("243")
+	ColorDimmer     = lipgloss.Color("239")
 	ColorBorder     = lipgloss.Color("94")
 	ColorHighlight  = lipgloss.Color("179")
 	ColorAmber      = lipgloss.Color("172")
@@ -19,6 +21,8 @@ var (
 	ColorCommand    = lipgloss.Color("179")
 	ColorDesc       = lipgloss.Color("243")
 	ColorAccent     = lipgloss.Color("137")
+	ColorGreen      = lipgloss.Color("108")
+	ColorTyping     = lipgloss.Color("109")
 
 	// 12 muted cantina tones for nicknames
 	NickColors = []color.Color{
@@ -38,15 +42,14 @@ var (
 )
 
 var (
-	TopBarStyle = lipgloss.NewStyle().
-			Foreground(ColorSand).
-			Background(lipgloss.Color("236")).
-			Bold(true).
-			Padding(0, 1)
+	TopBarBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.Border{Bottom: "─"}, false, false, true, false).
+				BorderForeground(ColorBorder)
 
 	BottomBarStyle = lipgloss.NewStyle().
 			Foreground(ColorDim).
-			Background(lipgloss.Color("236")).
+			Border(lipgloss.Border{Top: "─"}, true, false, false, false).
+			BorderForeground(ColorBorder).
 			Padding(0, 1)
 
 	ChatBorderStyle = lipgloss.NewStyle().
@@ -58,13 +61,7 @@ var (
 			Border(lipgloss.RoundedBorder(), true).
 			BorderForeground(ColorBorder).
 			Foreground(ColorSand).
-			Padding(0, 1)
-
-	CanvasPlaceholderStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(ColorBorder).
-				Foreground(ColorDim).
-				Align(lipgloss.Center, lipgloss.Center)
+			Padding(1, 1)
 
 	SystemMsgStyle = lipgloss.NewStyle().
 			Foreground(ColorDim).
@@ -103,13 +100,13 @@ var (
 				Foreground(ColorCommand).
 				Bold(true)
 
-	SplashFooterStyle = lipgloss.NewStyle().
-				Foreground(ColorDim).
-				MarginTop(1)
-
 	// Chat message styles
 	MsgTimeStyle = lipgloss.NewStyle().
-			Foreground(ColorDim)
+			Foreground(ColorDimmer)
+
+	TypingStyle = lipgloss.NewStyle().
+			Foreground(ColorTyping).
+			Italic(true)
 )
 
 func NickStyle(colorIndex int) lipgloss.Style {

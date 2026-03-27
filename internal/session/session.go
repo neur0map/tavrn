@@ -13,6 +13,7 @@ const (
 	MsgUserJoined
 	MsgUserLeft
 	MsgPurge
+	MsgTyping
 )
 
 // Msg is a message sent from the hub to a session.

@@ -2,9 +2,13 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
+
+// Animated glyphs that cycle for the ambient pulse
+var pulseFrames = []string{"·", ":", "·", " "}
 
 type TopBar struct {
 	Room        string
@@ -12,6 +16,7 @@ type TopBar struct {
 	WeeklyCount int
 	NowPlaying  string
 	Width       int
+	Frame       int // animation frame counter
 }
 
 func NewTopBar() TopBar {
@@ -19,41 +24,55 @@ func NewTopBar() TopBar {
 }
 
 func (t TopBar) View() string {
-	// /// TAVRN /// style header with gradient
-	diag := lipgloss.NewStyle().Foreground(ColorBorder).Render("///")
-	title := GradientText(" TAVRN.SH ", ColorHighlight, ColorAccent, true)
-	header := fmt.Sprintf(" %s%s%s", diag, title, diag)
+	if t.Width < 20 {
+		return ""
+	}
 
-	// Stats section
-	onlineBadge := lipgloss.NewStyle().Foreground(lipgloss.Color("108")).Bold(true).Render(
-		fmt.Sprintf("[ %02d online ]", t.OnlineCount),
-	)
-	weeklyBadge := lipgloss.NewStyle().Foreground(ColorDim).Render(
-		fmt.Sprintf("[ %d this week ]", t.WeeklyCount),
-	)
-	sep := lipgloss.NewStyle().Foreground(ColorBorder).Render(" * ")
-	room := lipgloss.NewStyle().Foreground(ColorAmber).Render(fmt.Sprintf("#%s", t.Room))
+	// Line 1: Brand banner
+	diag := lipgloss.NewStyle().Foreground(ColorBorder).Bold(true).Render("╱╱╱")
+	title := GradientText(" TAVRN.SH ", ColorHighlight, ColorAmber, true)
+	diagR := lipgloss.NewStyle().Foreground(ColorBorder).Bold(true).Render("╱╱╱")
 
-	stats := onlineBadge + "  " + weeklyBadge + sep + room
+	// Animated pulse dot
+	pulse := pulseFrames[t.Frame%len(pulseFrames)]
+	pulseStyled := lipgloss.NewStyle().Foreground(ColorHighlight).Render(pulse)
 
-	// Now playing (right aligned)
-	right := ""
+	brandLine := fmt.Sprintf("  %s%s%s  %s", diag, title, diagR, pulseStyled)
+
+	// Line 2: Stats
+	onlineDot := lipgloss.NewStyle().Foreground(ColorGreen).Render("●")
+	onlineNum := lipgloss.NewStyle().Foreground(ColorSand).Bold(true).Render(
+		fmt.Sprintf("%d online", t.OnlineCount))
+	weekly := lipgloss.NewStyle().Foreground(ColorDim).Render(
+		fmt.Sprintf("%d this week", t.WeeklyCount))
+	room := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).Render(
+		fmt.Sprintf("#%s", t.Room))
+	dot := lipgloss.NewStyle().Foreground(ColorDimmer).Render(" · ")
+
+	statsLine := fmt.Sprintf("  %s %s%s%s%s%s", onlineDot, onlineNum, dot, weekly, dot, room)
+
+	// Now playing on stats line if present
 	if t.NowPlaying != "" {
-		note := lipgloss.NewStyle().Foreground(ColorAmber).Render("~")
-		right = fmt.Sprintf(" %s %s ", note, t.NowPlaying)
+		note := lipgloss.NewStyle().Foreground(ColorAmber).Render("♪")
+		np := lipgloss.NewStyle().Foreground(ColorDim).Render(t.NowPlaying)
+		statsLine += dot + note + " " + np
 	}
 
-	// Compose: header  stats  [now playing]
-	left := header + "  " + stats
-	gap := t.Width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 0 {
-		gap = 0
-	}
-	padding := ""
-	for i := 0; i < gap; i++ {
-		padding += " "
+	// Pad brand line
+	brandPad := t.Width - lipgloss.Width(brandLine)
+	if brandPad > 0 {
+		brandLine += strings.Repeat(" ", brandPad)
 	}
 
-	content := left + padding + right
-	return TopBarStyle.Width(t.Width).MaxWidth(t.Width).Render(content)
+	// Pad stats line
+	statsPad := t.Width - lipgloss.Width(statsLine)
+	if statsPad > 0 {
+		statsLine += strings.Repeat(" ", statsPad)
+	}
+
+	// Bottom border
+	border := lipgloss.NewStyle().Foreground(ColorBorder).Render(
+		"  " + strings.Repeat("─", t.Width-4))
+
+	return lipgloss.JoinVertical(lipgloss.Left, brandLine, statsLine, border)
 }

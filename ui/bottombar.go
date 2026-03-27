@@ -15,13 +15,13 @@ func NewBottomBar() BottomBar {
 func (b BottomBar) View() string {
 	keyStyle := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
 	descStyle := lipgloss.NewStyle().Foreground(ColorDim)
-	sep := lipgloss.NewStyle().Foreground(ColorBorder).Render("  *  ")
+	sep := lipgloss.NewStyle().Foreground(ColorDimmer).Render("  ·  ")
 
-	content := " " +
+	content := "  " +
 		keyStyle.Render("/help") + sep +
 		keyStyle.Render("CTRL+C") + " " + descStyle.Render("exit") + sep +
-		keyStyle.Render("ENTER") + " " + descStyle.Render("send") + sep +
-		keyStyle.Render("/nick") + " " + descStyle.Render("rename")
+		keyStyle.Render("/nick") + " " + descStyle.Render("rename") + sep +
+		keyStyle.Render("/who") + " " + descStyle.Render("users")
 
 	return BottomBarStyle.Width(b.Width).MaxWidth(b.Width).Render(content)
 }
