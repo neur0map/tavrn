@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"tavrn/internal/jukebox"
 )
 
 type RoomInfo struct {
@@ -65,14 +66,18 @@ func (r RoomsPanel) View() string {
 }
 
 // ─────────────────────────────────────
-// Right sidebar: Online users
+// Right sidebar: Online users + Up Next
 // ─────────────────────────────────────
 
+const maxVisibleUsers = 5
+
 type OnlinePanel struct {
-	Users  []string
-	Width  int
-	Height int
-	Frame  int // for animated online dots
+	Users    []string
+	Queue    []jukebox.Request // populated from engine state
+	NowTitle string
+	Width    int
+	Height   int
+	Frame    int // for animated online dots
 }
 
 func NewOnlinePanel() OnlinePanel {
@@ -84,22 +89,82 @@ var onlineDotFrames = []string{"●", "●", "◉", "●"}
 
 func (o OnlinePanel) View() string {
 	header := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	dim := lipgloss.NewStyle().Foreground(ColorDim)
+	dimmer := lipgloss.NewStyle().Foreground(ColorDimmer)
 
 	var b strings.Builder
+
+	// ── Online section ──
 	b.WriteString(header.Render("ONLINE"))
 	b.WriteString("\n")
-	sep := lipgloss.NewStyle().Foreground(ColorDimmer).Render(
-		strings.Repeat("─", o.Width-4))
+	sep := dimmer.Render(strings.Repeat("─", o.Width-4))
 	b.WriteString(sep)
 	b.WriteString("\n")
 
 	if len(o.Users) == 0 {
-		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render("(empty)"))
+		b.WriteString(dim.Render("(empty)"))
 	} else {
 		dot := onlineDotFrames[o.Frame%len(onlineDotFrames)]
 		dotStyle := lipgloss.NewStyle().Foreground(ColorGreen).Render(dot)
-		for _, u := range o.Users {
+
+		shown := o.Users
+		overflow := 0
+		if len(shown) > maxVisibleUsers {
+			overflow = len(shown) - maxVisibleUsers
+			shown = shown[:maxVisibleUsers]
+		}
+
+		for _, u := range shown {
 			b.WriteString(fmt.Sprintf("%s %s\n", dotStyle, u))
+		}
+		if overflow > 0 {
+			b.WriteString(dim.Render(fmt.Sprintf("  +%d more\n", overflow)))
+		}
+	}
+
+	// ── Up Next section ──
+	if o.NowTitle != "" || len(o.Queue) > 0 {
+		b.WriteString("\n")
+		b.WriteString(header.Render("UP NEXT"))
+		b.WriteString("\n")
+		b.WriteString(sep)
+		b.WriteString("\n")
+
+		if o.NowTitle != "" {
+			note := lipgloss.NewStyle().Foreground(ColorMusic).Render("♪")
+			title := o.NowTitle
+			if len(title) > o.Width-6 {
+				title = title[:o.Width-9] + "..."
+			}
+			nowStyle := lipgloss.NewStyle().Foreground(ColorHighlight).Render(title)
+			b.WriteString(fmt.Sprintf("%s %s\n", note, nowStyle))
+		}
+
+		if len(o.Queue) > 0 {
+			if o.NowTitle != "" {
+				b.WriteString("\n")
+			}
+			limit := 5
+			if len(o.Queue) < limit {
+				limit = len(o.Queue)
+			}
+			for i := 0; i < limit; i++ {
+				req := o.Queue[i]
+				title := req.Track.Title
+				if len(title) > o.Width-8 {
+					title = title[:o.Width-11] + "..."
+				}
+				num := dimmer.Render(fmt.Sprintf("%d.", i+1))
+				name := dim.Render(title)
+				count := dimmer.Render(fmt.Sprintf(" %d", req.Count))
+				b.WriteString(fmt.Sprintf("%s %s%s\n", num, name, count))
+			}
+			if len(o.Queue) > 5 {
+				b.WriteString(dim.Render(fmt.Sprintf("  +%d more\n", len(o.Queue)-5)))
+			}
+		} else if o.NowTitle == "" {
+			b.WriteString(dim.Italic(true).Render("(empty)"))
+			b.WriteString("\n")
 		}
 	}
 

@@ -142,7 +142,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, doTick()
 
 	case JukeboxAddMsg:
-		a.modal = ModalNone
 		if a.jukeboxEngine != nil {
 			a.jukeboxEngine.AddRequest(a.session.Fingerprint, msg.Track)
 		}
@@ -663,9 +662,12 @@ func (a App) View() tea.View {
 			a.topBar.NowSource = jstate.Current.Source
 			a.topBar.NowDuration = jstate.Current.DurationTime()
 			a.topBar.NowPosition = jstate.Position
+			a.online.NowTitle = jstate.Current.Title
 		} else {
 			a.topBar.HasTrack = false
+			a.online.NowTitle = ""
 		}
+		a.online.Queue = jstate.Requests
 	}
 
 	topBar := a.topBar.View()
