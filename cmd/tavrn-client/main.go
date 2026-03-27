@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,6 +24,12 @@ import (
 )
 
 var version = "dev"
+
+// Track active mpv process so we can kill it on exit
+var (
+	activeMPV   *os.Process
+	activeMPVMu sync.Mutex
+)
 
 const (
 	serverAddr = "tavrn.sh:22"
@@ -147,6 +154,7 @@ func connect(addr string, noAudio bool) {
 	go func() {
 		<-sigs
 		cancel()
+		killMPV()
 		session.Close()
 	}()
 
@@ -156,7 +164,18 @@ func connect(addr string, noAudio bool) {
 	}
 
 	session.Wait()
-	cancel() // kill mpv when session ends
+	cancel()
+	killMPV()
+}
+
+func killMPV() {
+	activeMPVMu.Lock()
+	p := activeMPV
+	activeMPV = nil
+	activeMPVMu.Unlock()
+	if p != nil {
+		p.Kill()
+	}
 }
 
 // startAudioChannel opens the "tavrn-audio" SSH channel and plays audio via mpv.
@@ -188,14 +207,39 @@ func startAudioChannel(ctx context.Context, conn *ssh.Client) {
 		cmd := exec.CommandContext(ctx, "mpv",
 			"--no-video",
 			"--no-terminal",
+			"--no-cache",
 			"-",
 		)
 
+		// Ensure mpv dies when parent process dies
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Stdin = io.LimitReader(br, int64(audioLen))
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 
-		cmd.Run()
+		if err := cmd.Start(); err != nil {
+			continue
+		}
+
+		activeMPVMu.Lock()
+		activeMPV = cmd.Process
+		activeMPVMu.Unlock()
+
+		done := make(chan error, 1)
+		go func() { done <- cmd.Wait() }()
+
+		select {
+		case <-done:
+			// mpv finished normally
+		case <-ctx.Done():
+			cmd.Process.Kill()
+			<-done
+			return
+		}
+
+		activeMPVMu.Lock()
+		activeMPV = nil
+		activeMPVMu.Unlock()
 	}
 }
 
