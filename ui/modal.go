@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -335,16 +336,18 @@ func (j JoinRoomModal) View(width, height int) string {
 type PostNoteMsg struct{ Text string }
 
 type PostModal struct {
-	input textinput.Model
+	input textarea.Model
 }
 
 func NewPostModal() PostModal {
-	ti := textinput.New()
-	ti.Placeholder = "write something on the board..."
-	ti.Focus()
-	ti.CharLimit = 280
-	ti.Prompt = "> "
-	return PostModal{input: ti}
+	ta := textarea.New()
+	ta.Placeholder = "write something on the board..."
+	ta.Focus()
+	ta.CharLimit = 280
+	ta.MaxWidth = 50
+	ta.MaxHeight = 8
+	ta.ShowLineNumbers = false
+	return PostModal{input: ta}
 }
 
 func (p PostModal) Update(msg tea.Msg) (PostModal, tea.Cmd) {
@@ -352,7 +355,8 @@ func (p PostModal) Update(msg tea.Msg) (PostModal, tea.Cmd) {
 		switch keyMsg.String() {
 		case "esc":
 			return p, func() tea.Msg { return CloseModalMsg{} }
-		case "enter":
+		case "ctrl+s":
+			// Submit with ctrl+s since enter is newline in textarea
 			val := strings.TrimSpace(p.input.Value())
 			if val != "" {
 				return p, func() tea.Msg { return PostNoteMsg{Text: val} }
@@ -366,8 +370,9 @@ func (p PostModal) Update(msg tea.Msg) (PostModal, tea.Cmd) {
 }
 
 func (p PostModal) View(width, height int) string {
+	modalW := 54
 	headerText := " Post a Note "
-	fillLen := 36 - len(headerText)
+	fillLen := modalW - len(headerText)
 	if fillLen < 4 {
 		fillLen = 4
 	}
@@ -382,24 +387,25 @@ func (p PostModal) View(width, height int) string {
 	var b3 strings.Builder
 	b3.WriteString(header)
 	b3.WriteString("\n\n")
-	b3.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render("  Leave a note on the board (280 chars max)"))
+	b3.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render("  280 chars max. text wraps automatically."))
 	b3.WriteString("\n\n")
-	b3.WriteString("  " + p.input.View())
+	b3.WriteString(p.input.View())
 
 	b3.WriteString("\n\n")
 	footerFill := lipgloss.NewStyle().Foreground(ColorBorder).Render(
-		strings.Repeat("╱", 36))
+		strings.Repeat("╱", modalW))
 	b3.WriteString(footerFill)
 	b3.WriteString("\n")
-	enter := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")
+	submit := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("CTRL+S")
 	esc := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ESC")
 	b3.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
-		fmt.Sprintf("  %s post  ·  %s cancel", enter, esc)))
+		fmt.Sprintf("  %s post  ·  %s cancel", submit, esc)))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorBorder).
 		Padding(1, 2).
+		Width(modalW + 6).
 		Render(b3.String())
 }
 
