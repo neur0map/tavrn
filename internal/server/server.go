@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/wish/v2"
+	bm "charm.land/wish/v2/bubbletea"
+	lm "charm.land/wish/v2/elapsed"
 	"github.com/charmbracelet/ssh"
-	"github.com/charmbracelet/wish"
-	bm "github.com/charmbracelet/wish/bubbletea"
-	lm "github.com/charmbracelet/wish/logging"
 
 	"tavrn/internal/admin"
 	"tavrn/internal/hub"
@@ -124,7 +124,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 	}
 
 	model := ui.NewApp(sess, s.cfg.Store, s.cfg.Hub, s.cfg.Admin, onSend)
-	return model, []tea.ProgramOption{tea.WithAltScreen()}
+	return model, nil // alt screen is declarative in v2 View
 }
 
 func (s *Server) Start() error {
@@ -138,7 +138,6 @@ func (s *Server) Shutdown(timeout time.Duration) error {
 	return s.wish.Shutdown(ctx)
 }
 
-// StartHTTPAdmin starts the admin HTTP kill switch on the given address.
 func (s *Server) StartHTTPAdmin(addr, token string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/admin/purge", func(w http.ResponseWriter, r *http.Request) {

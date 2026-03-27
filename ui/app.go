@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"tavrn/internal/admin"
 	"tavrn/internal/chat"
 	"tavrn/internal/hub"
@@ -17,7 +17,16 @@ import (
 // HubMsg wraps a session.Msg for the Bubble Tea message loop.
 type HubMsg session.Msg
 
+type appState int
+
+const (
+	stateSplash appState = iota
+	stateTavern
+)
+
 type App struct {
+	state     appState
+	splash    Splash
 	session   *session.Session
 	chat      ChatView
 	topBar    TopBar
@@ -33,6 +42,8 @@ type App struct {
 
 func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, adm *admin.Admin, onSend func(session.Msg)) App {
 	return App{
+		state:     stateSplash,
+		splash:    NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair),
 		session:   sess,
 		chat:      NewChatView(),
 		topBar:    NewTopBar(),
@@ -65,20 +76,40 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.doLayout()
+		if a.state == stateSplash {
+			a.splash.width = msg.Width
+			a.splash.height = msg.Height
+		} else {
+			a.doLayout()
+		}
 		return a, nil
 
-	case tea.KeyMsg:
+	case EnterTavernMsg:
+		a.state = stateTavern
+		a.doLayout()
+		return a, WaitForHubMsg(a.session.Send)
+
+	case HubMsg:
+		a.handleHubMsg(session.Msg(msg))
+		return a, WaitForHubMsg(a.session.Send)
+	}
+
+	if a.state == stateSplash {
+		var cmd tea.Cmd
+		splash, cmd := a.splash.Update(msg)
+		a.splash = splash.(Splash)
+		return a, cmd
+	}
+
+	// Tavern state
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
 		case "enter":
 			return a.handleInput()
 		}
-
-	case HubMsg:
-		a.handleHubMsg(session.Msg(msg))
-		return a, WaitForHubMsg(a.session.Send)
 	}
 
 	var cmd tea.Cmd
@@ -116,7 +147,7 @@ func (a App) handleInput() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return a, WaitForHubMsg(a.session.Send)
+	return a, nil
 }
 
 func (a *App) handleCommand(parsed chat.ParseResult) {
@@ -124,7 +155,7 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 	case "help":
 		help := "Commands:\n" +
 			"  /nick <name>  - change your nickname\n" +
-			"  /who          - list users in this room\n" +
+			"  /who          - see who's around\n" +
 			"  /help         - show this help\n\n" +
 			"All data - nicknames, canvas, chat, identities, votes -\n" +
 			"is purged every Sunday at 23:59 UTC.\n" +
@@ -203,8 +234,8 @@ func (a *App) handleHubMsg(msg session.Msg) {
 }
 
 func (a *App) doLayout() {
-	sidebarWidth := 22
-	if a.width < 60 {
+	sidebarWidth := 24
+	if a.width < 70 {
 		sidebarWidth = 0
 	}
 	mainWidth := a.width - sidebarWidth
@@ -215,7 +246,7 @@ func (a *App) doLayout() {
 	if mainHeight < 4 {
 		mainHeight = 4
 	}
-	chatHeight := mainHeight // full height for now (canvas is placeholder)
+	chatHeight := mainHeight
 
 	a.topBar.Width = a.width
 	a.bottomBar.Width = a.width
@@ -224,19 +255,37 @@ func (a *App) doLayout() {
 	a.chat.SetSize(mainWidth, chatHeight)
 }
 
-func (a App) View() string {
+func (a App) View() tea.View {
+	if a.state == stateSplash {
+		return a.splash.View()
+	}
+
 	if a.width == 0 {
-		return "Loading..."
+		v := tea.NewView("Loading...")
+		v.AltScreen = true
+		return v
 	}
 
 	// Update live counts
 	a.topBar.OnlineCount = a.hub.OnlineCount()
 	wc, _ := a.store.WeeklyVisitorCount()
 	a.topBar.WeeklyCount = wc
+
+	// Update sidebar
+	sessions := a.hub.Sessions(a.session.Room)
+	var onlineNames []string
+	for _, s := range sessions {
+		name := s.Nickname
+		if s.Flair {
+			name = "~" + name
+		}
+		onlineNames = append(onlineNames, name)
+	}
+	a.sidebar.OnlineUsers = onlineNames
 	a.sidebar.Rooms = []RoomInfo{{Name: "lounge", Count: a.hub.OnlineCount()}}
 
-	sidebarWidth := 22
-	if a.width < 60 {
+	sidebarWidth := 24
+	if a.width < 70 {
 		sidebarWidth = 0
 	}
 
@@ -253,5 +302,8 @@ func (a App) View() string {
 
 	bottomBar := a.bottomBar.View()
 
-	return lipgloss.JoinVertical(lipgloss.Left, topBar, mainArea, bottomBar)
+	content := lipgloss.JoinVertical(lipgloss.Left, topBar, mainArea, bottomBar)
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }

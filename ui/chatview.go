@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"tavrn/internal/chat"
 )
 
@@ -24,11 +24,9 @@ func NewChatView() ChatView {
 	ti.Placeholder = "say something..."
 	ti.Focus()
 	ti.CharLimit = 500
-	ti.TextStyle = InputStyle
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(ColorHighlight)
 	ti.Prompt = "> "
 
-	vp := viewport.New(80, 10)
+	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(10))
 
 	return ChatView{
 		viewport: vp,
@@ -42,12 +40,17 @@ func (c *ChatView) SetSize(width, height int) {
 	c.height = height
 	inputHeight := 1
 	borderHeight := 2
-	c.viewport.Width = width - borderHeight
-	c.viewport.Height = height - inputHeight - borderHeight
-	if c.viewport.Height < 1 {
-		c.viewport.Height = 1
+	vpW := width - borderHeight
+	vpH := height - inputHeight - borderHeight
+	if vpW < 1 {
+		vpW = 1
 	}
-	c.input.Width = width - 4
+	if vpH < 1 {
+		vpH = 1
+	}
+	c.viewport.SetWidth(vpW)
+	c.viewport.SetHeight(vpH)
+	c.input.SetWidth(width - 4)
 }
 
 func (c *ChatView) AddMessage(msg chat.Message) {
@@ -63,9 +66,15 @@ func (c *ChatView) renderMessages() {
 			line := SystemMsgStyle.Render("* " + msg.Text)
 			lines = append(lines, line)
 		} else {
+			// Jelly-style: colored bar | nick timestamp\n  message
+			barColor := NickBarColor(msg.ColorIndex)
+			bar := lipgloss.NewStyle().Foreground(barColor).Render("|")
 			nick := NickStyle(msg.ColorIndex).Render(msg.Nickname)
-			line := fmt.Sprintf("%s: %s", nick, msg.Text)
-			lines = append(lines, line)
+			ts := MsgTimeStyle.Render(msg.Timestamp.Format("15:04"))
+			header := fmt.Sprintf(" %s %s %s", bar, nick, ts)
+			body := fmt.Sprintf(" %s %s", bar, msg.Text)
+			lines = append(lines, header)
+			lines = append(lines, body)
 		}
 	}
 	c.viewport.SetContent(strings.Join(lines, "\n"))

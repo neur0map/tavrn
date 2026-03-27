@@ -9,5 +9,6 @@ func NewBottomBar() BottomBar {
 }
 
 func (b BottomBar) View() string {
-	return BottomBarStyle.Width(b.Width).MaxWidth(b.Width).Render(" /help for commands")
+	content := " /help * CTRL+C: exit * ENTER: send"
+	return BottomBarStyle.Width(b.Width).MaxWidth(b.Width).Render(content)
 }
