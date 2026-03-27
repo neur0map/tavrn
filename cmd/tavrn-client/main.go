@@ -276,17 +276,18 @@ func handleResize(fd int, session *ssh.Session) {
 
 func sshAuthMethods() []ssh.AuthMethod {
 	var methods []ssh.AuthMethod
+	var agentClient agent.ExtendedAgent
 
-	// Try SSH agent first.
+	// Connect to SSH agent if available.
 	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
 		conn, err := net.Dial("unix", sock)
 		if err == nil {
-			agentClient := agent.NewClient(conn)
-			methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
+			agentClient = agent.NewClient(conn)
 		}
 	}
 
-	// Fall back to key files on disk.
+	// Load key files from disk. If agent is available, add keys to it
+	// automatically (like ssh AddKeysToAgent=yes).
 	home, _ := os.UserHomeDir()
 	keyFiles := []string{
 		filepath.Join(home, ".ssh", "id_ed25519"),
@@ -298,11 +299,26 @@ func sshAuthMethods() []ssh.AuthMethod {
 		if err != nil {
 			continue
 		}
-		signer, err := ssh.ParsePrivateKey(data)
+		key, err := ssh.ParseRawPrivateKey(data)
+		if err != nil {
+			continue
+		}
+
+		// Add to agent if connected
+		if agentClient != nil {
+			agentClient.Add(agent.AddedKey{PrivateKey: key})
+		}
+
+		signer, err := ssh.NewSignerFromKey(key)
 		if err != nil {
 			continue
 		}
 		methods = append(methods, ssh.PublicKeys(signer))
+	}
+
+	// Also use agent keys (includes any we just added + pre-existing)
+	if agentClient != nil {
+		methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
 	}
 
 	return methods
