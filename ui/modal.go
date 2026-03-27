@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"tavrn/internal/jukebox"
 )
 
 type ModalType int
@@ -20,6 +21,7 @@ const (
 	ModalPost
 	ModalExpandNote
 	ModalAdminConfirm
+	ModalJukebox
 )
 
 // CloseModalMsg signals modal should close.
@@ -71,7 +73,8 @@ func (h HelpModal) View(width, height int) string {
 		{"F1 or ?", "this help"},
 		{"F2", "change nickname"},
 		{"F3", "switch rooms"},
-		{"F4", "post note"},
+		{"F4", "jukebox"},
+		{"F5", "post note"},
 		{"ESC", "close modal"},
 		{"SHIFT+arrows", "scroll chat"},
 	}
@@ -554,3 +557,10 @@ func (a AdminConfirmModal) View(width, height int) string {
 		Padding(1, 2).
 		Render(b5.String())
 }
+
+// ─────────────────────────────────────
+// Jukebox Messages
+// ─────────────────────────────────────
+
+type JukeboxAddMsg struct{ Track jukebox.Track }
+type JukeboxVoteMsg struct{ TrackID string }
