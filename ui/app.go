@@ -407,6 +407,6 @@ func (a App) View() tea.View {
 
 	v := tea.NewView(base)
 	v.AltScreen = true
-	v.WindowTitle = TabTitle(a.topBar.Frame, a.hub.OnlineCount())
+	v.WindowTitle = "tavrn.sh"
 	return v
 }

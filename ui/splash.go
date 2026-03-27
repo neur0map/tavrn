@@ -254,7 +254,7 @@ func (s Splash) View() tea.View {
 
 	v := tea.NewView(strings.Join(screenLines, "\n"))
 	v.AltScreen = true
-	v.WindowTitle = SplashTabTitle(s.frame)
+	v.WindowTitle = "tavrn.sh"
 	return v
 }
 

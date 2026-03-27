@@ -7,14 +7,6 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Scrolling diagonal frames for the top bar decoration
-var topBarDiagFrames = []string{
-	"╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱",
-	"╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱",
-	"╲╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╲",
-	"╱╲╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╱╲╱",
-}
-
 type TopBar struct {
 	Room        string
 	OnlineCount int
@@ -33,18 +25,11 @@ func (t TopBar) View() string {
 		return ""
 	}
 
-	// Line 1: Animated diagonal fill bar (full width)
-	diagPattern := topBarDiagFrames[t.Frame%len(topBarDiagFrames)]
-	// Repeat to fill width
-	fillRunes := []rune(diagPattern)
-	var fillBuf strings.Builder
-	for i := 0; i < t.Width; i++ {
-		fillBuf.WriteRune(fillRunes[i%len(fillRunes)])
-	}
-	pair := artGradientPairs[t.Frame%len(artGradientPairs)]
-	diagLine := GradientText(fillBuf.String(), pair[0], pair[1], false)
+	// Line 1: Static diagonal fill bar
+	fill := strings.Repeat("╱", t.Width)
+	diagLine := lipgloss.NewStyle().Foreground(ColorBorder).Render(fill)
 
-	// Line 2: Stats — left: online/weekly, center: title, right: room
+	// Line 2: Stats left, title center, room right
 	onlineDot := lipgloss.NewStyle().Foreground(ColorGreen).Render("●")
 	onlineNum := lipgloss.NewStyle().Foreground(ColorSand).Bold(true).Render(
 		fmt.Sprintf("%d online", t.OnlineCount))
@@ -54,21 +39,17 @@ func (t TopBar) View() string {
 
 	statsLeft := fmt.Sprintf("  %s %s%s%s", onlineDot, onlineNum, dot, weekly)
 
-	// Center: big gradient title
 	titleText := "TAVRN.SH"
-	title := GradientText(titleText, pair[1], pair[0], true)
+	title := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(titleText)
 
-	// Right: room name
 	room := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).Render(
 		fmt.Sprintf("#%s  ", t.Room))
 
-	// Position title in center
 	leftW := lipgloss.Width(statsLeft)
 	rightW := lipgloss.Width(room)
-	titleW := len(titleText)
-	centerPos := (t.Width - titleW) / 2
+	centerPos := (t.Width - len(titleText)) / 2
 	gapLeft := centerPos - leftW
-	gapRight := t.Width - centerPos - titleW - rightW
+	gapRight := t.Width - centerPos - len(titleText) - rightW
 	if gapLeft < 1 {
 		gapLeft = 1
 	}
@@ -78,7 +59,7 @@ func (t TopBar) View() string {
 
 	statsLine := statsLeft + strings.Repeat(" ", gapLeft) + title + strings.Repeat(" ", gapRight) + room
 
-	// Line 3: bottom border
+	// Line 3: Border
 	border := lipgloss.NewStyle().Foreground(ColorBorder).Render(
 		"  " + strings.Repeat("─", t.Width-4) + "  ")
 
