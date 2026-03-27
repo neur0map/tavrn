@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"tavrn/internal/hub"
+	"tavrn/internal/jukebox"
 	"tavrn/internal/server"
 	"tavrn/internal/session"
 	"tavrn/internal/store"
@@ -60,16 +62,27 @@ func runServer() {
 		os.MkdirAll(".ssh", 0700)
 	}
 
+	var backends []jukebox.MusicBackend
+	if jamendoID := os.Getenv("JAMENDO_CLIENT_ID"); jamendoID != "" {
+		backends = append(backends, jukebox.NewJamendo(jamendoID))
+		log.Printf("Jamendo backend enabled")
+	}
+	jukeboxEngine := jukebox.NewEngine(backends)
+
 	srv, err := server.New(server.Config{
-		Host:        "0.0.0.0",
-		Port:        2222,
-		HostKeyPath: ".ssh/id_ed25519",
-		Store:       st,
-		Hub:         h,
+		Host:          "0.0.0.0",
+		Port:          2222,
+		HostKeyPath:   ".ssh/id_ed25519",
+		Store:         st,
+		Hub:           h,
+		JukeboxEngine: jukeboxEngine,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Schedulers
 	go startPurgeScheduler(st, h)
@@ -80,7 +93,7 @@ func runServer() {
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		if err := srv.Start(); err != nil {
+		if err := srv.Start(ctx); err != nil {
 			log.Fatalf("server: %v", err)
 		}
 	}()
@@ -89,6 +102,7 @@ func runServer() {
 
 	<-done
 	log.Println("tavern closing...")
+	cancel()
 	h.BroadcastAll(session.Msg{
 		Type: session.MsgSystem,
 		Text: "the tavern is closing...",

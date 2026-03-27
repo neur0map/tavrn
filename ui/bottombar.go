@@ -24,12 +24,13 @@ func (b BottomBar) View() string {
 			k.Render("P") + " " + d.Render("post") + sep +
 			k.Render("E") + " " + d.Render("expand") + sep +
 			k.Render("D") + " " + d.Render("delete") + sep +
-			k.Render("TAB") + " " + d.Render("select") + sep +
-			k.Render("J") + " " + d.Render("rooms")
+			k.Render("F4") + " " + d.Render("music") + sep +
+			k.Render("TAB") + " " + d.Render("select")
 	} else {
 		content = "  " +
 			k.Render("F1") + " " + d.Render("help") + sep +
 			k.Render("F3") + " " + d.Render("rooms") + sep +
+			k.Render("F4") + " " + d.Render("music") + sep +
 			k.Render("SHIFT+↑↓") + " " + d.Render("scroll")
 	}
 

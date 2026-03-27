@@ -16,17 +16,19 @@ import (
 
 	"tavrn/internal/hub"
 	"tavrn/internal/identity"
+	"tavrn/internal/jukebox"
 	"tavrn/internal/session"
 	"tavrn/internal/store"
 	"tavrn/ui"
 )
 
 type Config struct {
-	Host        string
-	Port        int
-	HostKeyPath string
-	Store       *store.Store
-	Hub         *hub.Hub
+	Host          string
+	Port          int
+	HostKeyPath   string
+	Store         *store.Store
+	Hub           *hub.Hub
+	JukeboxEngine *jukebox.Engine
 }
 
 type Server struct {
@@ -141,11 +143,20 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		s.cfg.Hub.Broadcast(msg.Room, msg)
 	}
 
-	model := ui.NewApp(sess, s.cfg.Store, s.cfg.Hub, onSend)
+	model := ui.NewApp(sess, s.cfg.Store, s.cfg.Hub, onSend, s.cfg.JukeboxEngine)
 	return model, nil
 }
 
-func (s *Server) Start() error {
+func (s *Server) Start(ctx context.Context) error {
+	if s.cfg.JukeboxEngine != nil {
+		go s.cfg.JukeboxEngine.Run(ctx)
+		s.cfg.JukeboxEngine.SetOnStateChange(func() {
+			s.cfg.Hub.BroadcastAll(session.Msg{
+				Type: session.MsgJukeboxUpdate,
+			})
+		})
+	}
+
 	log.Printf("tavrn.sh listening on %s:%d", s.cfg.Host, s.cfg.Port)
 	return s.wish.ListenAndServe()
 }

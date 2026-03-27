@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"math"
@@ -10,9 +11,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/harmonica"
-	"tavrn/internal/room"
 	"tavrn/internal/chat"
 	"tavrn/internal/hub"
+	"tavrn/internal/jukebox"
+	"tavrn/internal/room"
 	"tavrn/internal/sanitize"
 	"tavrn/internal/session"
 	"tavrn/internal/store"
@@ -56,27 +58,32 @@ type App struct {
 	postModal         PostModal
 	expandNoteModal   ExpandNoteModal
 
+	// Jukebox
+	jukeboxModal  JukeboxModal
+	jukeboxEngine *jukebox.Engine
+
 	// Transition animation
 	transSpring harmonica.Spring
 	transPos    float64 // 0.0 = fully hidden, 1.0 = fully revealed
 	transVel    float64
 }
 
-func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(session.Msg)) App {
+func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(session.Msg), engine *jukebox.Engine) App {
 	return App{
-		state:     stateSplash,
-		splash:    NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair),
-		session:   sess,
-		chat:      NewChatView(),
-		topBar:    NewTopBar(),
-		bottomBar: NewBottomBar(),
-		rooms:     NewRoomsPanel(),
-		online:    NewOnlinePanel(),
-		gallery:   NewGalleryView(sess.Fingerprint),
-		store:     st,
-		hub:       h,
-		onSend:    onSend,
-		modal:     ModalNone,
+		state:         stateSplash,
+		splash:        NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair),
+		session:       sess,
+		chat:          NewChatView(),
+		topBar:        NewTopBar(),
+		bottomBar:     NewBottomBar(),
+		rooms:         NewRoomsPanel(),
+		online:        NewOnlinePanel(),
+		gallery:       NewGalleryView(sess.Fingerprint),
+		store:         st,
+		hub:           h,
+		onSend:        onSend,
+		modal:         ModalNone,
+		jukeboxEngine: engine,
 	}
 }
 
@@ -134,8 +141,33 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, doTick()
 
+	case JukeboxAddMsg:
+		a.modal = ModalNone
+		if a.jukeboxEngine != nil {
+			a.jukeboxEngine.AddRequest(a.session.Fingerprint, msg.Track)
+		}
+		return a, nil
+
+	case JukeboxVoteMsg:
+		if a.jukeboxEngine != nil {
+			ok := a.jukeboxEngine.Vote(a.session.Fingerprint, msg.TrackID)
+			if ok {
+				a.jukeboxModal.MarkVoted(msg.TrackID)
+			}
+		}
+		return a, nil
+
+	case JukeboxSearchResultMsg:
+		var cmd tea.Cmd
+		a.jukeboxModal, cmd = a.jukeboxModal.Update(msg)
+		return a, cmd
+
 	case HubMsg:
-		a.handleHubMsg(session.Msg(msg))
+		inner := session.Msg(msg)
+		if inner.Type == session.MsgJukeboxUpdate {
+			return a, WaitForHubMsg(a.session.Send)
+		}
+		a.handleHubMsg(inner)
 		return a, WaitForHubMsg(a.session.Send)
 
 	case CloseModalMsg:
@@ -258,6 +290,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.joinRoomModal = NewJoinRoomModal(room.All, counts, a.session.Room)
 			return a, nil
 		case "f4":
+			a.modal = ModalJukebox
+			a.jukeboxModal = NewJukeboxModal(a.jukeboxEngine)
+			return a, nil
+		case "f5":
 			a.modal = ModalPost
 			a.postModal = NewPostModal()
 			return a, nil
@@ -348,6 +384,14 @@ func (a App) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch a.modal {
+	case ModalJukebox:
+		var cmd tea.Cmd
+		a.jukeboxModal, cmd = a.jukeboxModal.Update(msg)
+		if query, ok := a.jukeboxModal.SearchQuery(); ok {
+			searchCmd := a.jukeboxSearch(query)
+			return a, tea.Batch(cmd, searchCmd)
+		}
+		return a, cmd
 	case ModalNick:
 		var cmd tea.Cmd
 		a.nickModal, cmd = a.nickModal.Update(msg)
@@ -610,6 +654,20 @@ func (a App) View() tea.View {
 	}
 	a.rooms.Rooms = roomInfos
 
+	if a.jukeboxEngine != nil {
+		jstate := a.jukeboxEngine.State()
+		if jstate.Current != nil {
+			a.topBar.HasTrack = true
+			a.topBar.NowTitle = jstate.Current.Title
+			a.topBar.NowArtist = jstate.Current.Artist
+			a.topBar.NowSource = jstate.Current.Source
+			a.topBar.NowDuration = jstate.Current.DurationTime()
+			a.topBar.NowPosition = jstate.Position
+		} else {
+			a.topBar.HasTrack = false
+		}
+	}
+
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()
 
@@ -649,6 +707,8 @@ func (a App) View() tea.View {
 			modalBox = a.postModal.View(a.width, a.height)
 		case ModalExpandNote:
 			modalBox = a.expandNoteModal.View(a.width, a.height)
+		case ModalJukebox:
+			modalBox = a.jukeboxModal.View(a.width, a.height)
 		}
 		base = Overlay(base, modalBox, a.width, a.height)
 	}
@@ -663,6 +723,41 @@ func (a App) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "tavrn.sh"
 	return v
+}
+
+func (a App) jukeboxSearch(query string) tea.Cmd {
+	return func() tea.Msg {
+		if a.jukeboxEngine == nil {
+			return JukeboxSearchResultMsg{Err: fmt.Errorf("jukebox not available")}
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		type result struct {
+			tracks []jukebox.Track
+			err    error
+		}
+
+		backends := a.jukeboxEngine.Backends()
+		ch := make(chan result, len(backends))
+		for _, b := range backends {
+			go func(backend jukebox.MusicBackend) {
+				tracks, err := backend.Search(ctx, query, 5)
+				ch <- result{tracks, err}
+			}(b)
+		}
+
+		var allTracks []jukebox.Track
+		for range backends {
+			r := <-ch
+			if r.err == nil {
+				allTracks = append(allTracks, r.tracks...)
+			}
+		}
+
+		return JukeboxSearchResultMsg{Results: allTracks}
+	}
 }
 
 // renderTransition applies a spring-animated top-down wipe reveal.
