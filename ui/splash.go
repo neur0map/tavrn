@@ -11,20 +11,21 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-const tavernArt = `      _____
-     /     \
-    | () () |
-     \ ___ /
-   __|_____|__
-  /  |     |  \
- |   | TAV |   |
- |   | ERN |   |
- |   |_____|   |
- |  /       \  |
- |_/  [] []  \_|
-   |  []  [] |
-   |_________|
-   |_|_|_|_|_|`
+const tavernArt = `         )  (  (
+        (   ) )
+     ____) (__(_
+    |  TAVRN   |
+    | ~~~~~~~~ |
+    |  .    .  |
+    |__________|
+   /|   |  |   |\
+  / |  _|__|_  | \
+ /  | |      | |  \
+|   | | OPEN | |   |
+|   | |______| |   |
+|   |  []  []  |   |
+|___|__________|___|
+ |_| |_| |_| |_| |`
 
 var artGradientPairs = [][2]color.Color{
 	{lipgloss.Color("137"), lipgloss.Color("94")},
@@ -275,8 +276,20 @@ func (s Splash) renderCard() string {
 	b.WriteString("\n\n")
 
 	artLines := strings.Split(tavernArt, "\n")
+	// Find max art width for centering
+	maxArtW := 0
 	for _, line := range artLines {
-		colored := GradientText(line, pair[0], pair[1], false)
+		if len(line) > maxArtW {
+			maxArtW = len(line)
+		}
+	}
+	for _, line := range artLines {
+		pad := (44 - len(line)) / 2
+		if pad < 0 {
+			pad = 0
+		}
+		padded := strings.Repeat(" ", pad) + line
+		colored := GradientText(padded, pair[0], pair[1], false)
 		b.WriteString(colored)
 		b.WriteString("\n")
 	}
