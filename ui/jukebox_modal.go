@@ -41,14 +41,15 @@ type JukeboxModal struct {
 
 	// Vote tab
 	voteCursor int
-	hasVoted   bool
-	votedFor   string
 
 	// Confirmation
 	lastAdded string // track title just added
+
+	// User fingerprint for vote tracking
+	userFP string
 }
 
-func NewJukeboxModal(engine *jukebox.Engine) JukeboxModal {
+func NewJukeboxModal(engine *jukebox.Engine, userFP string) JukeboxModal {
 	ti := textinput.New()
 	ti.Placeholder = "search for music..."
 	ti.CharLimit = 100
@@ -58,6 +59,7 @@ func NewJukeboxModal(engine *jukebox.Engine) JukeboxModal {
 		tab:         tabNowPlaying,
 		engine:      engine,
 		searchInput: ti,
+		userFP:      userFP,
 	}
 }
 
@@ -160,7 +162,7 @@ func (m JukeboxModal) updateSearch(msg tea.KeyPressMsg) (JukeboxModal, tea.Cmd) 
 
 func (m JukeboxModal) updateVote(msg tea.KeyPressMsg) (JukeboxModal, tea.Cmd) {
 	state := m.engine.State()
-	if len(state.Shortlist) == 0 {
+	if len(state.Requests) == 0 {
 		return m, nil
 	}
 
@@ -168,16 +170,16 @@ func (m JukeboxModal) updateVote(msg tea.KeyPressMsg) (JukeboxModal, tea.Cmd) {
 	case "up", "k":
 		m.voteCursor--
 		if m.voteCursor < 0 {
-			m.voteCursor = len(state.Shortlist) - 1
+			m.voteCursor = len(state.Requests) - 1
 		}
 	case "down", "j":
 		m.voteCursor++
-		if m.voteCursor >= len(state.Shortlist) {
+		if m.voteCursor >= len(state.Requests) {
 			m.voteCursor = 0
 		}
 	case "enter":
-		if !m.hasVoted && m.voteCursor < len(state.Shortlist) {
-			trackID := state.Shortlist[m.voteCursor].Track.ID
+		if m.voteCursor < len(state.Requests) {
+			trackID := state.Requests[m.voteCursor].Track.ID
 			return m, func() tea.Msg { return JukeboxVoteMsg{TrackID: trackID} }
 		}
 	}
@@ -192,12 +194,6 @@ func (m *JukeboxModal) SearchQuery() (string, bool) {
 		return strings.TrimSpace(m.searchInput.Value()), true
 	}
 	return "", false
-}
-
-// MarkVoted marks that the user has voted.
-func (m *JukeboxModal) MarkVoted(trackID string) {
-	m.hasVoted = true
-	m.votedFor = trackID
 }
 
 func (m JukeboxModal) View(width, height int) string {
@@ -352,10 +348,8 @@ func (m JukeboxModal) viewNowPlaying(w int) string {
 	switch state.Phase {
 	case jukebox.PhasePlaying:
 		phaseStr = lipgloss.NewStyle().Foreground(ColorGreen).Render("● playing")
-	case jukebox.PhaseRequesting:
-		phaseStr = lipgloss.NewStyle().Foreground(ColorAmber).Render("● requesting")
-	case jukebox.PhaseVoting:
-		phaseStr = lipgloss.NewStyle().Foreground(ColorMusic).Render("● voting")
+	case jukebox.PhaseIdle:
+		phaseStr = lipgloss.NewStyle().Foreground(ColorDim).Render("● idle")
 	}
 	listeners := lipgloss.NewStyle().Foreground(ColorDim).Render(
 		fmt.Sprintf("%d listening", state.Listeners))
@@ -437,82 +431,116 @@ func (m JukeboxModal) viewSearch(w int) string {
 
 func (m JukeboxModal) viewVote(w int) string {
 	state := m.engine.State()
+	votedFor := m.engine.UserVotedFor(m.userFP)
 
 	var b strings.Builder
 
-	if state.Phase != jukebox.PhaseVoting {
-		phaseMsg := "Voting opens when the current track is near its end."
-		if state.Phase == jukebox.PhaseRequesting {
-			phaseMsg = "Requesting phase — search and add tracks first!"
-		} else if state.Phase == jukebox.PhaseIdle {
-			phaseMsg = "No track playing yet."
-		}
-		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render(
-			"  " + phaseMsg))
-		b.WriteString("\n")
-		return b.String()
-	}
-
+	// Header
 	b.WriteString(lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render(
 		"  VOTE FOR NEXT TRACK"))
+	b.WriteString("\n")
+	b.WriteString(lipgloss.NewStyle().Foreground(ColorDimmer).Render(
+		"  most votes plays next"))
 	b.WriteString("\n\n")
 
-	if len(state.Shortlist) == 0 {
+	if len(state.Requests) == 0 {
 		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render(
 			"  No tracks requested yet."))
 		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render(
+			"  Search and add songs first!"))
+		b.WriteString("\n")
 		return b.String()
 	}
 
-	for i, tally := range state.Shortlist {
-		isSelected := i == m.voteCursor
-		num := fmt.Sprintf("%d.", i+1)
-		tallyTitle := tally.Track.Title
-		if len(tallyTitle) > 25 {
-			tallyTitle = tallyTitle[:22] + "..."
-		}
-
-		voteBar := strings.Repeat("▓", tally.Votes)
-		if voteBar == "" {
-			voteBar = " "
-		}
-
-		isVotedFor := m.votedFor == tally.Track.ID
-
-		if isSelected {
-			indicator := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(" ▸ ")
-			titleS := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(tallyTitle)
-			barS := lipgloss.NewStyle().Foreground(ColorMusic).Render(voteBar)
-			line := fmt.Sprintf("%s%s %s  %s",
-				indicator,
-				lipgloss.NewStyle().Foreground(ColorDim).Render(num),
-				titleS, barS)
-			if isVotedFor {
-				line += lipgloss.NewStyle().Foreground(ColorGreen).Render(" ✓")
-			}
-			b.WriteString(line + "\n")
-		} else {
-			titleS := lipgloss.NewStyle().Foreground(ColorSand).Render(tallyTitle)
-			barS := lipgloss.NewStyle().Foreground(ColorDimmer).Render(voteBar)
-			line := fmt.Sprintf("   %s %s  %s",
-				lipgloss.NewStyle().Foreground(ColorDim).Render(num),
-				titleS, barS)
-			if isVotedFor {
-				line += lipgloss.NewStyle().Foreground(ColorGreen).Render(" ✓")
-			}
-			b.WriteString(line + "\n")
+	// Find max votes for bar scaling
+	maxVotes := 0
+	for _, req := range state.Requests {
+		if req.Votes > maxVotes {
+			maxVotes = req.Votes
 		}
 	}
 
-	b.WriteString("\n")
-	if m.hasVoted {
-		b.WriteString(lipgloss.NewStyle().Foreground(ColorGreen).Render(
-			"  ✓ Vote cast!"))
-	} else {
-		jk := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("j/k")
-		enter := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")
+	// Show up to 5 requests
+	limit := 5
+	if len(state.Requests) < limit {
+		limit = len(state.Requests)
+	}
+
+	barMaxWidth := 8
+
+	for i := 0; i < limit; i++ {
+		req := state.Requests[i]
+		isSelected := i == m.voteCursor
+		isVoted := votedFor == req.Track.ID
+
+		// Title (truncate)
+		title := req.Track.Title
+		maxTitle := w - 18
+		if maxTitle < 12 {
+			maxTitle = 12
+		}
+		if len(title) > maxTitle {
+			title = title[:maxTitle-3] + "..."
+		}
+
+		// Vote bar
+		barLen := 0
+		if maxVotes > 0 {
+			barLen = (req.Votes * barMaxWidth) / maxVotes
+			if req.Votes > 0 && barLen == 0 {
+				barLen = 1
+			}
+		}
+
+		if isSelected {
+			// Selected row — highlighted
+			indicator := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(" ▸ ")
+			titleS := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(title)
+			b.WriteString(indicator + titleS)
+		} else {
+			titleS := lipgloss.NewStyle().Foreground(ColorSand).Render(title)
+			b.WriteString("   " + titleS)
+		}
+
+		// Vote indicator
+		if isVoted {
+			b.WriteString(lipgloss.NewStyle().Foreground(ColorGreen).Bold(true).Render(" ✓"))
+		}
+		b.WriteString("\n")
+
+		// Vote bar + count on next line (indented)
+		if req.Votes > 0 {
+			bar := lipgloss.NewStyle().Foreground(ColorMusic).Render(
+				strings.Repeat("█", barLen))
+			voteCount := lipgloss.NewStyle().Foreground(ColorDim).Render(
+				fmt.Sprintf(" %d vote", req.Votes))
+			if req.Votes > 1 {
+				voteCount = lipgloss.NewStyle().Foreground(ColorDim).Render(
+					fmt.Sprintf(" %d votes", req.Votes))
+			}
+			b.WriteString("     " + bar + voteCount + "\n")
+		} else {
+			emptyBar := lipgloss.NewStyle().Foreground(ColorDimmer).Render("░░░░░░░░")
+			b.WriteString("     " + emptyBar + "\n")
+		}
+	}
+
+	if len(state.Requests) > 5 {
 		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
-			fmt.Sprintf("  %s navigate  ·  %s vote (1 only)", jk, enter)))
+			fmt.Sprintf("\n  +%d more tracks\n", len(state.Requests)-5)))
+	}
+
+	// Footer hints
+	b.WriteString("\n")
+	jk := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("j/k")
+	enter := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")
+	if votedFor != "" {
+		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
+			fmt.Sprintf("  %s navigate  ·  %s change vote", jk, enter)))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
+			fmt.Sprintf("  %s navigate  ·  %s vote", jk, enter)))
 	}
 	b.WriteString("\n")
 

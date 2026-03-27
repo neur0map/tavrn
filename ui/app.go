@@ -149,10 +149,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case JukeboxVoteMsg:
 		if a.jukeboxEngine != nil {
-			ok := a.jukeboxEngine.Vote(a.session.Fingerprint, msg.TrackID)
-			if ok {
-				a.jukeboxModal.MarkVoted(msg.TrackID)
-			}
+			a.jukeboxEngine.Vote(a.session.Fingerprint, msg.TrackID)
 		}
 		return a, nil
 
@@ -290,7 +287,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		case "f4":
 			a.modal = ModalJukebox
-			a.jukeboxModal = NewJukeboxModal(a.jukeboxEngine)
+			a.jukeboxModal = NewJukeboxModal(a.jukeboxEngine, a.session.Fingerprint)
 			return a, nil
 		case "f5":
 			a.modal = ModalPost

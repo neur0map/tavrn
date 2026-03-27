@@ -11,29 +11,23 @@ import (
 type Phase int
 
 const (
-	PhaseIdle       Phase = iota
+	PhaseIdle    Phase = iota
 	PhasePlaying
-	PhaseRequesting
-	PhaseVoting
 )
 
 type Request struct {
 	Track     Track
-	Count     int
+	Count     int       // how many users requested this
+	Votes     int       // how many votes for next
+	Voters    map[string]bool
 	FirstTime time.Time
-}
-
-type VoteTally struct {
-	Track Track
-	Votes int
 }
 
 type EngineState struct {
 	Phase     Phase
 	Current   *Track
 	Position  time.Duration
-	Requests  []Request
-	Shortlist []VoteTally
+	Requests  []Request // sorted by votes desc, then count desc
 	Listeners int
 }
 
@@ -44,10 +38,8 @@ type Engine struct {
 	phase         Phase
 	current       *Track
 	playStart     time.Time
-	requestPool   map[string]*Request
-	shortlist     []Track
-	votes         map[string]map[string]bool
-	userVoted     map[string]bool
+	requestPool   map[string]*Request // keyed by Track.ID
+	userVoted     map[string]string   // fingerprint -> trackID they voted for
 	backends      []MusicBackend
 	onStateChange OnStateChange
 	listeners     int
@@ -57,8 +49,7 @@ func NewEngine(backends []MusicBackend) *Engine {
 	return &Engine{
 		phase:       PhaseIdle,
 		requestPool: make(map[string]*Request),
-		votes:       make(map[string]map[string]bool),
-		userVoted:   make(map[string]bool),
+		userVoted:   make(map[string]string),
 		backends:    backends,
 	}
 }
@@ -99,11 +90,20 @@ func (e *Engine) State() EngineState {
 		state.Position = time.Since(e.playStart)
 	}
 
+	// Build sorted requests: votes desc, then count desc, then earliest first
 	reqs := make([]Request, 0, len(e.requestPool))
 	for _, r := range e.requestPool {
-		reqs = append(reqs, *r)
+		reqs = append(reqs, Request{
+			Track:     r.Track,
+			Count:     r.Count,
+			Votes:     r.Votes,
+			FirstTime: r.FirstTime,
+		})
 	}
 	sort.Slice(reqs, func(i, j int) bool {
+		if reqs[i].Votes != reqs[j].Votes {
+			return reqs[i].Votes > reqs[j].Votes
+		}
 		if reqs[i].Count != reqs[j].Count {
 			return reqs[i].Count > reqs[j].Count
 		}
@@ -111,20 +111,17 @@ func (e *Engine) State() EngineState {
 	})
 	state.Requests = reqs
 
-	for _, t := range e.shortlist {
-		tally := VoteTally{Track: t}
-		if voters, ok := e.votes[t.ID]; ok {
-			tally.Votes = len(voters)
-		}
-		state.Shortlist = append(state.Shortlist, tally)
-	}
-	sort.Slice(state.Shortlist, func(i, j int) bool {
-		return state.Shortlist[i].Votes > state.Shortlist[j].Votes
-	})
-
 	return state
 }
 
+// UserVotedFor returns the track ID the user voted for, or empty string.
+func (e *Engine) UserVotedFor(userFP string) string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.userVoted[userFP]
+}
+
+// AddRequest adds a track to the request pool.
 func (e *Engine) AddRequest(userFP string, track Track) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -139,6 +136,7 @@ func (e *Engine) AddRequest(userFP string, track Track) {
 		e.requestPool[track.ID] = &Request{
 			Track:     track,
 			Count:     1,
+			Voters:    make(map[string]bool),
 			FirstTime: time.Now(),
 		}
 	}
@@ -146,34 +144,38 @@ func (e *Engine) AddRequest(userFP string, track Track) {
 	e.notifyChange()
 }
 
+// Vote casts a vote for a track. Users vote by fingerprint (pub key).
+// Returns true if the vote was accepted.
 func (e *Engine) Vote(userFP string, trackID string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.phase != PhaseVoting {
+	if e.phase == PhaseIdle {
 		return false
 	}
 
-	if e.userVoted[userFP] {
+	// Check track exists in request pool
+	req, ok := e.requestPool[trackID]
+	if !ok {
 		return false
 	}
 
-	inShortlist := false
-	for _, t := range e.shortlist {
-		if t.ID == trackID {
-			inShortlist = true
-			break
+	// If user already voted for something, remove that vote first
+	if oldTrackID, voted := e.userVoted[userFP]; voted {
+		if oldTrackID == trackID {
+			return false // already voted for this track
+		}
+		// Switch vote: remove from old track
+		if oldReq, ok := e.requestPool[oldTrackID]; ok {
+			delete(oldReq.Voters, userFP)
+			oldReq.Votes = len(oldReq.Voters)
 		}
 	}
-	if !inShortlist {
-		return false
-	}
 
-	if e.votes[trackID] == nil {
-		e.votes[trackID] = make(map[string]bool)
-	}
-	e.votes[trackID][userFP] = true
-	e.userVoted[userFP] = true
+	// Cast vote
+	req.Voters[userFP] = true
+	req.Votes = len(req.Voters)
+	e.userVoted[userFP] = trackID
 
 	e.notifyChange()
 	return true
@@ -190,38 +192,15 @@ func (e *Engine) StartPlaying(track Track) {
 	e.notifyChange()
 }
 
-func (e *Engine) OpenRequesting() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.phase = PhaseRequesting
-	e.requestPool = make(map[string]*Request)
-
-	e.notifyChange()
-}
-
-func (e *Engine) OpenVoting() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.shortlist = e.buildShortlistLocked()
-	e.votes = make(map[string]map[string]bool)
-	e.userVoted = make(map[string]bool)
-	e.phase = PhaseVoting
-
-	e.notifyChange()
-}
-
 func (e *Engine) FinishTrack() *Track {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	winner := e.pickWinnerLocked()
 
+	// Reset for next round
 	e.requestPool = make(map[string]*Request)
-	e.shortlist = nil
-	e.votes = make(map[string]map[string]bool)
-	e.userVoted = make(map[string]bool)
+	e.userVoted = make(map[string]string)
 
 	if winner != nil {
 		e.current = winner
@@ -267,40 +246,22 @@ func (e *Engine) tick() {
 
 	progress := elapsed.Seconds() / duration.Seconds()
 
-	switch e.phase {
-	case PhasePlaying:
-		if progress >= 0.75 {
-			e.phase = PhaseRequesting
-			e.requestPool = make(map[string]*Request)
-			e.notifyChange()
-		}
-	case PhaseRequesting:
-		if progress >= 0.90 {
-			e.shortlist = e.buildShortlistLocked()
-			e.votes = make(map[string]map[string]bool)
-			e.userVoted = make(map[string]bool)
-			e.phase = PhaseVoting
-			e.notifyChange()
-		}
-	case PhaseVoting:
-		if progress >= 1.0 {
-			winner := e.pickWinnerLocked()
-			e.requestPool = make(map[string]*Request)
-			e.shortlist = nil
-			e.votes = make(map[string]map[string]bool)
-			e.userVoted = make(map[string]bool)
+	if progress >= 1.0 {
+		// Track ended — pick winner
+		winner := e.pickWinnerLocked()
+		e.requestPool = make(map[string]*Request)
+		e.userVoted = make(map[string]string)
 
-			if winner != nil {
-				e.current = winner
-				e.playStart = time.Now()
-				e.phase = PhasePlaying
-			} else {
-				e.phase = PhaseIdle
-				e.current = nil
-				e.tryAutoPlay()
-			}
-			e.notifyChange()
+		if winner != nil {
+			e.current = winner
+			e.playStart = time.Now()
+			e.phase = PhasePlaying
+		} else {
+			e.current = nil
+			e.phase = PhaseIdle
+			e.tryAutoPlay()
 		}
+		e.notifyChange()
 	}
 }
 
@@ -324,68 +285,39 @@ func (e *Engine) tryAutoPlay() {
 	}
 }
 
-func (e *Engine) buildShortlist() []Track {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.buildShortlistLocked()
-}
-
-func (e *Engine) buildShortlistLocked() []Track {
-	reqs := make([]*Request, 0, len(e.requestPool))
-	for _, r := range e.requestPool {
-		reqs = append(reqs, r)
-	}
-	sort.Slice(reqs, func(i, j int) bool {
-		if reqs[i].Count != reqs[j].Count {
-			return reqs[i].Count > reqs[j].Count
-		}
-		return reqs[i].FirstTime.Before(reqs[j].FirstTime)
-	})
-
-	limit := 5
-	if len(reqs) < limit {
-		limit = len(reqs)
-	}
-
-	tracks := make([]Track, limit)
-	for i := 0; i < limit; i++ {
-		tracks[i] = reqs[i].Track
-	}
-	return tracks
-}
-
-func (e *Engine) pickWinner() *Track {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.pickWinnerLocked()
-}
-
+// pickWinnerLocked returns the track with the most votes.
+// Ties broken by request count, then random.
 func (e *Engine) pickWinnerLocked() *Track {
-	if len(e.shortlist) == 0 {
+	if len(e.requestPool) == 0 {
 		return nil
 	}
 
 	type candidate struct {
 		track Track
 		votes int
+		count int
 	}
 	var candidates []candidate
-	for _, t := range e.shortlist {
-		v := 0
-		if voters, ok := e.votes[t.ID]; ok {
-			v = len(voters)
-		}
-		candidates = append(candidates, candidate{track: t, votes: v})
+	for _, r := range e.requestPool {
+		candidates = append(candidates, candidate{
+			track: r.Track,
+			votes: r.Votes,
+			count: r.Count,
+		})
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].votes > candidates[j].votes
+		if candidates[i].votes != candidates[j].votes {
+			return candidates[i].votes > candidates[j].votes
+		}
+		return candidates[i].count > candidates[j].count
 	})
 
 	maxVotes := candidates[0].votes
+	maxCount := candidates[0].count
 	var tied []candidate
 	for _, c := range candidates {
-		if c.votes == maxVotes {
+		if c.votes == maxVotes && c.count == maxCount {
 			tied = append(tied, c)
 		}
 	}

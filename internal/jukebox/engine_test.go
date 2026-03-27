@@ -19,7 +19,7 @@ func TestEngineInitialState(t *testing.T) {
 func TestEngineAddRequest(t *testing.T) {
 	e := NewEngine(nil)
 	e.mu.Lock()
-	e.phase = PhaseRequesting
+	e.phase = PhasePlaying
 	e.mu.Unlock()
 
 	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
@@ -37,7 +37,7 @@ func TestEngineAddRequest(t *testing.T) {
 func TestEngineAddRequestDuplicate(t *testing.T) {
 	e := NewEngine(nil)
 	e.mu.Lock()
-	e.phase = PhaseRequesting
+	e.phase = PhasePlaying
 	e.mu.Unlock()
 
 	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
@@ -53,14 +53,25 @@ func TestEngineAddRequestDuplicate(t *testing.T) {
 	}
 }
 
+func TestEngineAddRequestRejectsIdle(t *testing.T) {
+	e := NewEngine(nil)
+	// Phase is idle by default
+	track := Track{ID: "1", Title: "Test"}
+	e.AddRequest("user1", track)
+
+	state := e.State()
+	if len(state.Requests) != 0 {
+		t.Errorf("expected 0 requests in idle phase, got %d", len(state.Requests))
+	}
+}
+
 func TestEngineVote(t *testing.T) {
 	e := NewEngine(nil)
 	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
 
 	e.mu.Lock()
-	e.phase = PhaseVoting
-	e.shortlist = []Track{track}
-	e.votes = make(map[string]map[string]bool)
+	e.phase = PhasePlaying
+	e.requestPool["1"] = &Request{Track: track, Count: 1, Voters: make(map[string]bool)}
 	e.mu.Unlock()
 
 	ok := e.Vote("user1", "1")
@@ -68,20 +79,59 @@ func TestEngineVote(t *testing.T) {
 		t.Error("expected vote to succeed")
 	}
 
+	// Same user, same track — should fail
 	ok = e.Vote("user1", "1")
 	if ok {
 		t.Error("expected duplicate vote to fail")
 	}
+
+	// Check vote counted
+	state := e.State()
+	if state.Requests[0].Votes != 1 {
+		t.Errorf("expected 1 vote, got %d", state.Requests[0].Votes)
+	}
 }
 
-func TestEngineVoteNotInShortlist(t *testing.T) {
+func TestEngineVoteSwitching(t *testing.T) {
 	e := NewEngine(nil)
-	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
+	trackA := Track{ID: "a", Title: "A"}
+	trackB := Track{ID: "b", Title: "B"}
 
 	e.mu.Lock()
-	e.phase = PhaseVoting
-	e.shortlist = []Track{track}
-	e.votes = make(map[string]map[string]bool)
+	e.phase = PhasePlaying
+	e.requestPool["a"] = &Request{Track: trackA, Count: 1, Voters: make(map[string]bool)}
+	e.requestPool["b"] = &Request{Track: trackB, Count: 1, Voters: make(map[string]bool)}
+	e.mu.Unlock()
+
+	e.Vote("user1", "a")
+	if e.UserVotedFor("user1") != "a" {
+		t.Error("expected user1 voted for a")
+	}
+
+	// Switch vote to b
+	ok := e.Vote("user1", "b")
+	if !ok {
+		t.Error("expected vote switch to succeed")
+	}
+	if e.UserVotedFor("user1") != "b" {
+		t.Error("expected user1 voted for b after switch")
+	}
+
+	state := e.State()
+	for _, r := range state.Requests {
+		if r.Track.ID == "a" && r.Votes != 0 {
+			t.Errorf("expected 0 votes on a after switch, got %d", r.Votes)
+		}
+		if r.Track.ID == "b" && r.Votes != 1 {
+			t.Errorf("expected 1 vote on b after switch, got %d", r.Votes)
+		}
+	}
+}
+
+func TestEngineVoteNotInPool(t *testing.T) {
+	e := NewEngine(nil)
+	e.mu.Lock()
+	e.phase = PhasePlaying
 	e.mu.Unlock()
 
 	ok := e.Vote("user1", "nonexistent")
@@ -90,51 +140,18 @@ func TestEngineVoteNotInShortlist(t *testing.T) {
 	}
 }
 
-func TestEngineBuildShortlist(t *testing.T) {
-	e := NewEngine(nil)
-
-	e.mu.Lock()
-	e.phase = PhaseRequesting
-	e.requestPool = map[string]*Request{
-		"a": {Track: Track{ID: "a", Title: "A"}, Count: 5},
-		"b": {Track: Track{ID: "b", Title: "B"}, Count: 3},
-		"c": {Track: Track{ID: "c", Title: "C"}, Count: 7},
-		"d": {Track: Track{ID: "d", Title: "D"}, Count: 1},
-		"e": {Track: Track{ID: "e", Title: "E"}, Count: 4},
-		"f": {Track: Track{ID: "f", Title: "F"}, Count: 2},
-		"g": {Track: Track{ID: "g", Title: "G"}, Count: 6},
-	}
-	e.mu.Unlock()
-
-	shortlist := e.buildShortlist()
-	if len(shortlist) != 5 {
-		t.Fatalf("expected 5 tracks in shortlist, got %d", len(shortlist))
-	}
-	if shortlist[0].ID != "c" {
-		t.Errorf("expected first track to be 'c', got '%s'", shortlist[0].ID)
-	}
-	if shortlist[4].ID != "b" {
-		t.Errorf("expected last track to be 'b', got '%s'", shortlist[4].ID)
-	}
-}
-
 func TestEnginePickWinner(t *testing.T) {
 	e := NewEngine(nil)
 
-	tracks := []Track{
-		{ID: "a", Title: "A"},
-		{ID: "b", Title: "B"},
-	}
 	e.mu.Lock()
-	e.phase = PhaseVoting
-	e.shortlist = tracks
-	e.votes = map[string]map[string]bool{
-		"a": {"user1": true},
-		"b": {"user2": true, "user3": true},
+	e.phase = PhasePlaying
+	e.requestPool = map[string]*Request{
+		"a": {Track: Track{ID: "a", Title: "A"}, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
+		"b": {Track: Track{ID: "b", Title: "B"}, Count: 1, Votes: 2, Voters: map[string]bool{"u2": true, "u3": true}},
 	}
 	e.mu.Unlock()
 
-	winner := e.pickWinner()
+	winner := e.FinishTrack()
 	if winner == nil {
 		t.Fatal("expected a winner")
 	}
@@ -143,43 +160,48 @@ func TestEnginePickWinner(t *testing.T) {
 	}
 }
 
-func TestEngineTickPhaseTransitions(t *testing.T) {
+func TestEngineTickTrackEnds(t *testing.T) {
 	e := NewEngine(nil)
 
 	track := Track{ID: "1", Title: "Test", Duration: 100}
 	e.mu.Lock()
 	e.current = &track
-	e.playStart = time.Now().Add(-76 * time.Second)
+	e.playStart = time.Now().Add(-101 * time.Second)
 	e.phase = PhasePlaying
 	e.mu.Unlock()
 
 	e.tick()
 
 	state := e.State()
-	if state.Phase != PhaseRequesting {
-		t.Errorf("expected PhaseRequesting at 76%%, got %v", state.Phase)
-	}
-
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-91 * time.Second)
-	e.mu.Unlock()
-
-	e.tick()
-
-	state = e.State()
-	if state.Phase != PhaseVoting {
-		t.Errorf("expected PhaseVoting at 91%%, got %v", state.Phase)
-	}
-
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-101 * time.Second)
-	e.mu.Unlock()
-
-	e.tick()
-
-	state = e.State()
+	// No backends, no requests — should go idle
 	if state.Phase != PhaseIdle {
-		t.Errorf("expected PhaseIdle after track ends with no votes/backends, got %v", state.Phase)
+		t.Errorf("expected PhaseIdle after track ends with no requests/backends, got %v", state.Phase)
+	}
+}
+
+func TestEngineTickWithWinner(t *testing.T) {
+	e := NewEngine(nil)
+
+	track := Track{ID: "1", Title: "Current", Duration: 100}
+	nextTrack := Track{ID: "2", Title: "Next"}
+
+	e.mu.Lock()
+	e.current = &track
+	e.playStart = time.Now().Add(-101 * time.Second)
+	e.phase = PhasePlaying
+	e.requestPool = map[string]*Request{
+		"2": {Track: nextTrack, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
+	}
+	e.mu.Unlock()
+
+	e.tick()
+
+	state := e.State()
+	if state.Phase != PhasePlaying {
+		t.Errorf("expected PhasePlaying after winner picked, got %v", state.Phase)
+	}
+	if state.Current == nil || state.Current.ID != "2" {
+		t.Error("expected current track to be the winner")
 	}
 }
 
@@ -190,10 +212,9 @@ func TestEngineFinishTrack(t *testing.T) {
 
 	e.mu.Lock()
 	e.current = &track
-	e.phase = PhaseVoting
-	e.shortlist = []Track{nextTrack}
-	e.votes = map[string]map[string]bool{
-		"2": {"user1": true},
+	e.phase = PhasePlaying
+	e.requestPool = map[string]*Request{
+		"2": {Track: nextTrack, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
 	}
 	e.mu.Unlock()
 
