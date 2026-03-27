@@ -46,7 +46,9 @@ func main() {
 			fmt.Printf("tavrn %s\n", version)
 			return
 		case "--update":
-			runUpdate()
+			if err := runUpdate(); err != nil {
+				log.Fatalf("update: %v", err)
+			}
 			return
 		case "--no-audio":
 			noAudio = true
@@ -57,7 +59,7 @@ func main() {
 			fmt.Println("  tavrn              Connect to tavrn.sh with audio")
 			fmt.Println("  tavrn --no-audio   Connect without audio")
 			fmt.Println("  tavrn --dev        Connect to localhost:2222")
-			fmt.Println("  tavrn --update     Update to latest version")
+			fmt.Println("  tavrn --update     Update the local client binary")
 			fmt.Println("  tavrn --version    Print version")
 			return
 		default:
@@ -340,7 +342,20 @@ func sshAuthMethods() []ssh.AuthMethod {
 	return methods
 }
 
-func runUpdate() {
-	fmt.Println("Checking for updates...")
-	fmt.Println("Already at latest version.")
+func runUpdate() error {
+	if _, err := exec.LookPath("go"); err != nil {
+		return fmt.Errorf("go is required to update tavrn-client via --update")
+	}
+
+	fmt.Println("Updating tavrn-client...")
+	cmd := exec.Command("go", "install", "tavrn.sh/cmd/tavrn-client@latest")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	fmt.Println("Client update complete.")
+	return nil
 }

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -32,16 +36,31 @@ func main() {
 			}
 			runMessage(os.Args[2])
 			return
+		case "--update":
+			if err := runUpdate(); err != nil {
+				log.Fatalf("update: %v", err)
+			}
+			return
 		case "help", "--help", "-h":
 			fmt.Println("Usage:")
 			fmt.Println("  tavrn                       Start the SSH server")
 			fmt.Println("  tavrn purge                 Purge all data")
-			fmt.Println("  tavrn --message \"text\"       Send banner to all connected users")
+			fmt.Println("  tavrn --message \"text\"      Send banner to all connected users")
+			fmt.Println("  tavrn --update              Pull main, rebuild, and restart the service")
 			return
 		}
 	}
 
 	runServer()
+}
+
+func getPort() int {
+	if p := os.Getenv("TAVRN_PORT"); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			return n
+		}
+	}
+	return 2222
 }
 
 func runMessage(text string) {
@@ -91,9 +110,10 @@ func runServer() {
 		streamer.StreamTrack(track)
 	})
 
+	port := getPort()
 	srv, err := server.New(server.Config{
 		Host:          "0.0.0.0",
-		Port:          2222,
+		Port:          port,
 		HostKeyPath:   ".ssh/id_ed25519",
 		Store:         st,
 		Hub:           h,
@@ -107,12 +127,10 @@ func runServer() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Schedulers
 	go startPurgeScheduler(st, h)
 	go startGalleryCleanup(st, h)
 	go watchBannerFile(h)
 
-	// Start SSH server
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
 
@@ -122,7 +140,7 @@ func runServer() {
 		}
 	}()
 
-	log.Println("tavrn.sh is open. ssh localhost -p 2222")
+	log.Printf("tavrn.sh is open. ssh localhost -p %d", port)
 
 	<-done
 	log.Println("tavern closing...")
@@ -133,6 +151,114 @@ func runServer() {
 	})
 	srv.Shutdown(5 * time.Second)
 	log.Println("goodbye.")
+}
+
+func runUpdate() error {
+	if os.Geteuid() == 0 {
+		return fmt.Errorf("run tavrn --update as the tavrn user, not root")
+	}
+
+	repoDir, err := executableRepoDir()
+	if err != nil {
+		return err
+	}
+
+	env := updateEnv()
+	if err := ensureCleanTrackedFiles(repoDir, env); err != nil {
+		return err
+	}
+
+	fmt.Println("Fetching latest main...")
+	if err := runCommand(repoDir, env, "git", "fetch", "origin", "main"); err != nil {
+		return err
+	}
+
+	fmt.Println("Pulling latest main...")
+	if err := runCommand(repoDir, env, "git", "pull", "--ff-only", "origin", "main"); err != nil {
+		return err
+	}
+
+	fmt.Println("Building tavrn...")
+	if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn", "./cmd/tavrn"); err != nil {
+		return err
+	}
+
+	fmt.Println("Building tavrn-client...")
+	if err := runCommand(repoDir, env, "go", "build", "-o", "tavrn-client", "./cmd/tavrn-client"); err != nil {
+		return err
+	}
+
+	fmt.Println("Finalizing update...")
+	if err := runCommand(repoDir, env, "sudo", "/usr/local/sbin/tavrn-finalize-update"); err != nil {
+		return err
+	}
+
+	rev, err := commandOutput(repoDir, env, "git", "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Update complete. Running commit %s\n", rev)
+	return nil
+}
+
+func executableRepoDir() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate executable: %w", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return filepath.Dir(exe), nil
+}
+
+func ensureCleanTrackedFiles(repoDir string, env []string) error {
+	out, err := commandOutput(repoDir, env, "git", "status", "--porcelain", "--untracked-files=no")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(out) != "" {
+		return fmt.Errorf("repo has local tracked changes; commit or revert them before updating")
+	}
+	return nil
+}
+
+func updateEnv() []string {
+	pathParts := []string{"/usr/local/go/bin"}
+	if current := os.Getenv("PATH"); current != "" {
+		pathParts = append(pathParts, current)
+	}
+
+	env := os.Environ()
+	env = append(env, "PATH="+strings.Join(pathParts, ":"))
+	return env
+}
+
+func runCommand(dir string, env []string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = env
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func commandOutput(dir string, env []string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = env
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%s %s: %s", name, strings.Join(args, " "), strings.TrimSpace(stderr.String()))
+		}
+		return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(stdout.String()), nil
 }
 
 func startPurgeScheduler(st *store.Store, h *hub.Hub) {
@@ -188,7 +314,6 @@ func watchBannerFile(h *hub.Hub) {
 			continue
 		}
 
-		// Remove file immediately so it doesn't re-broadcast
 		os.Remove(bannerFile)
 
 		log.Printf("Broadcasting banner: %s", text)
