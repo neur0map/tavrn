@@ -63,6 +63,7 @@ func (h HelpModal) View(width, height int) string {
 	b.WriteString(cat.Render("CHAT"))
 	b.WriteString("\n")
 	cmds := []struct{ c, d string }{
+		{"/join ROOM", "switch rooms"},
 		{"/nick NAME", "change your handle"},
 		{"/who", "see who's around"},
 		{"/help", "show this card"},

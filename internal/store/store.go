@@ -59,6 +59,17 @@ func (s *Store) migrate() error {
 		fingerprint TEXT PRIMARY KEY,
 		first_seen  DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+	CREATE TABLE IF NOT EXISTS chat_messages (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		room        TEXT NOT NULL,
+		fingerprint TEXT,
+		nickname    TEXT,
+		color_index INTEGER DEFAULT 0,
+		text        TEXT NOT NULL,
+		is_system   INTEGER DEFAULT 0,
+		created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_chat_room_created ON chat_messages(room, created_at);
 	`
 	_, err := s.db.Exec(schema)
 	return err
@@ -162,6 +173,62 @@ func (s *Store) WeeklyVisitorCount() (int, error) {
 	return count, err
 }
 
+type ChatRow struct {
+	Room        string
+	Fingerprint string
+	Nickname    string
+	ColorIndex  int
+	Text        string
+	IsSystem    bool
+	CreatedAt   time.Time
+}
+
+func (s *Store) SaveMessage(room, fingerprint, nickname string, colorIndex int, text string, isSystem bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sys := 0
+	if isSystem {
+		sys = 1
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO chat_messages (room, fingerprint, nickname, color_index, text, is_system)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, room, fingerprint, nickname, colorIndex, text, sys)
+	return err
+}
+
+func (s *Store) RecentMessages(room string, limit int) ([]ChatRow, error) {
+	rows, err := s.db.Query(`
+		SELECT room, fingerprint, nickname, color_index, text, is_system, created_at
+		FROM chat_messages
+		WHERE room = ?
+		ORDER BY created_at DESC
+		LIMIT ?
+	`, room, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var msgs []ChatRow
+	for rows.Next() {
+		var m ChatRow
+		var sys int
+		var ts string
+		if err := rows.Scan(&m.Room, &m.Fingerprint, &m.Nickname, &m.ColorIndex, &m.Text, &sys, &ts); err != nil {
+			continue
+		}
+		m.IsSystem = sys != 0
+		m.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ts)
+		msgs = append(msgs, m)
+	}
+	// Reverse so oldest first
+	for i, j := 0, len(msgs)-1; i < j; i, j = i+1, j-1 {
+		msgs[i], msgs[j] = msgs[j], msgs[i]
+	}
+	return msgs, nil
+}
+
 func (s *Store) PurgeAll() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,5 +239,6 @@ func (s *Store) PurgeAll() error {
 	defer tx.Rollback()
 	tx.Exec(`DELETE FROM users`)
 	tx.Exec(`DELETE FROM weekly_visitors`)
+	tx.Exec(`DELETE FROM chat_messages`)
 	return tx.Commit()
 }

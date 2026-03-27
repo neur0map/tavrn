@@ -17,15 +17,14 @@ type RoomInfo struct {
 // ─────────────────────────────────────
 
 type RoomsPanel struct {
-	Rooms  []RoomInfo
-	Width  int
-	Height int
+	Rooms       []RoomInfo
+	CurrentRoom string
+	Width       int
+	Height      int
 }
 
 func NewRoomsPanel() RoomsPanel {
-	return RoomsPanel{
-		Rooms: []RoomInfo{{Name: "lounge", Count: 0}},
-	}
+	return RoomsPanel{CurrentRoom: "lounge"}
 }
 
 func (r RoomsPanel) View() string {
@@ -39,25 +38,24 @@ func (r RoomsPanel) View() string {
 	b.WriteString(sep)
 	b.WriteString("\n")
 
-	for _, room := range r.Rooms {
-		active := lipgloss.NewStyle().
-			Foreground(ColorAmber).
-			Bold(true).
-			Render(fmt.Sprintf("#%s", room.Name))
-		count := lipgloss.NewStyle().
-			Foreground(ColorDim).
-			Render(fmt.Sprintf(" %d", room.Count))
-		b.WriteString(active + count + "\n")
-	}
+	for _, rm := range r.Rooms {
+		isCurrent := rm.Name == r.CurrentRoom
+		name := fmt.Sprintf("#%s", rm.Name)
+		count := fmt.Sprintf(" %d", rm.Count)
 
-	// Future rooms (locked, v0.5)
-	b.WriteString("\n")
-	locked := lipgloss.NewStyle().Foreground(ColorDimmer)
-	b.WriteString(locked.Render("  #gallery"))
-	b.WriteString("\n")
-	b.WriteString(locked.Render("  #chaotic"))
-	b.WriteString("\n\n")
-	b.WriteString(lipgloss.NewStyle().Foreground(ColorDimmer).Italic(true).Render("  soon..."))
+		if isCurrent {
+			// Active room: highlighted with indicator
+			indicator := lipgloss.NewStyle().Foreground(ColorHighlight).Render("▸")
+			roomName := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).Render(name)
+			roomCount := lipgloss.NewStyle().Foreground(ColorDim).Render(count)
+			b.WriteString(indicator + roomName + roomCount + "\n")
+		} else {
+			// Other rooms: dimmer
+			roomName := lipgloss.NewStyle().Foreground(ColorSand).Render(name)
+			roomCount := lipgloss.NewStyle().Foreground(ColorDimmer).Render(count)
+			b.WriteString(" " + roomName + roomCount + "\n")
+		}
+	}
 
 	return SidebarStyle.
 		Width(r.Width).

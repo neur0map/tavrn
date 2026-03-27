@@ -119,7 +119,31 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		Room: "lounge",
 	})
 
+	// Send recent chat history to this session
+	history, _ := s.cfg.Store.RecentMessages("lounge", 50)
+	for _, m := range history {
+		msgType := session.MsgChat
+		if m.IsSystem {
+			msgType = session.MsgSystem
+		}
+		sess.Send <- session.Msg{
+			Type:        msgType,
+			Nickname:    m.Nickname,
+			Fingerprint: m.Fingerprint,
+			ColorIndex:  m.ColorIndex,
+			Text:        m.Text,
+			Room:        m.Room,
+		}
+	}
+
 	onSend := func(msg session.Msg) {
+		// Persist to SQLite
+		switch msg.Type {
+		case session.MsgChat:
+			s.cfg.Store.SaveMessage(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false)
+		case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
+			s.cfg.Store.SaveMessage(msg.Room, "", "", 0, msg.Text, true)
+		}
 		s.cfg.Hub.Broadcast(msg.Room, msg)
 	}
 

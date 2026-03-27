@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/harmonica"
 	"tavrn/internal/admin"
+	"tavrn/internal/room"
 	"tavrn/internal/chat"
 	"tavrn/internal/hub"
 	"tavrn/internal/sanitize"
@@ -295,6 +296,23 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 		text := fmt.Sprintf("In #%s: %s", a.session.Room, strings.Join(names, ", "))
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, text))
 
+	case "join":
+		target := strings.TrimPrefix(strings.TrimSpace(parsed.Args), "#")
+		if target == "" {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Usage: /join <room>"))
+			return
+		}
+		if !room.IsValid(target) {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				fmt.Sprintf("Unknown room. Available: %s", strings.Join(room.All, ", "))))
+			return
+		}
+		if target == a.session.Room {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "You're already here."))
+			return
+		}
+		a.switchRoom(target)
+
 	case "ban", "unban", "purge":
 		if !a.session.IsAdmin {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
@@ -339,6 +357,50 @@ func (a *App) handleHubMsg(msg session.Msg) {
 			a.chat.SetTyping(msg.Nickname)
 		}
 	}
+}
+
+func (a *App) switchRoom(target string) {
+	oldRoom := a.session.Room
+
+	// Announce leave in old room
+	a.onSend(session.Msg{
+		Type: session.MsgUserLeft,
+		Text: fmt.Sprintf("%s left for #%s", a.session.Nickname, target),
+		Room: oldRoom,
+	})
+
+	// Switch
+	a.session.Room = target
+
+	// Clear chat and load history for new room
+	a.chat = NewChatView()
+	a.doLayout()
+
+	history, _ := a.store.RecentMessages(target, 50)
+	for _, m := range history {
+		msg := chat.Message{
+			Nickname:   m.Nickname,
+			ColorIndex: m.ColorIndex,
+			Text:       m.Text,
+			Room:       m.Room,
+			Timestamp:  m.CreatedAt,
+			IsSystem:   m.IsSystem,
+		}
+		a.chat.AddMessage(msg)
+	}
+
+	a.chat.AddMessage(chat.NewSystemMessage(target,
+		fmt.Sprintf("You joined #%s", target)))
+
+	// Announce join in new room
+	a.onSend(session.Msg{
+		Type: session.MsgUserJoined,
+		Text: fmt.Sprintf("%s joined from #%s", a.session.Nickname, oldRoom),
+		Room: target,
+	})
+
+	// Update top bar
+	a.topBar.Room = target
 }
 
 func (a *App) doLayout() {
@@ -395,7 +457,15 @@ func (a App) View() tea.View {
 		onlineNames = append(onlineNames, name)
 	}
 	a.online.Users = onlineNames
-	a.rooms.Rooms = []RoomInfo{{Name: "lounge", Count: a.hub.OnlineCount()}}
+	a.rooms.CurrentRoom = a.session.Room
+	var roomInfos []RoomInfo
+	for _, rName := range room.All {
+		roomInfos = append(roomInfos, RoomInfo{
+			Name:  rName,
+			Count: len(a.hub.Sessions(rName)),
+		})
+	}
+	a.rooms.Rooms = roomInfos
 
 	topBar := a.topBar.View()
 	chatView := a.chat.View()
