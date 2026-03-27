@@ -275,9 +275,27 @@ func (s Splash) renderCard() string {
 	b.WriteString(centerText(sub, 30, 44))
 	b.WriteString("\n\n")
 
-	// Render art in a single color to preserve monospace alignment
+	// Render art centered in a single color to preserve alignment
 	artStyle := lipgloss.NewStyle().Foreground(pair[0])
-	b.WriteString(artStyle.Render(tavernArt))
+	artLines := strings.Split(tavernArt, "\n")
+	maxW := 0
+	for _, l := range artLines {
+		if len(l) > maxW {
+			maxW = len(l)
+		}
+	}
+	var centeredArt strings.Builder
+	for i, l := range artLines {
+		pad := (44 - maxW) / 2
+		if pad < 0 {
+			pad = 0
+		}
+		centeredArt.WriteString(strings.Repeat(" ", pad) + l)
+		if i < len(artLines)-1 {
+			centeredArt.WriteString("\n")
+		}
+	}
+	b.WriteString(artStyle.Render(centeredArt.String()))
 	b.WriteString("\n")
 
 	nick := s.nickname
