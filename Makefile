@@ -1,14 +1,10 @@
-.PHONY: run connect test check clean
+.PHONY: run test check clean
 
-# Start server locally (builds first)
+# Build both binaries, start server, connect with audio
 run:
-	go build -o bin/tavrn-admin ./cmd/tavrn-admin
-	./bin/tavrn-admin
-
-# Connect to local server with audio (builds first)
-connect:
-	go build -o bin/tavrn ./cmd/tavrn
-	./bin/tavrn --dev
+	@go build -o bin/tavrn-admin ./cmd/tavrn-admin
+	@go build -o bin/tavrn ./cmd/tavrn
+	@./bin/tavrn-admin & sleep 1 && ./bin/tavrn --dev; kill %1 2>/dev/null
 
 # Run all tests with race detector
 test:
