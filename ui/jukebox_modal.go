@@ -296,8 +296,12 @@ func (m JukeboxModal) viewNowPlaying(w int) string {
 	// Confirmation banner
 	if m.lastAdded != "" {
 		added := m.lastAdded
-		if len(added) > w-10 {
-			added = added[:w-13] + "..."
+		if lipgloss.Width(added) > w-10 {
+			runes := []rune(added)
+			for lipgloss.Width(string(runes)) > w-13 && len(runes) > 0 {
+				runes = runes[:len(runes)-1]
+			}
+			added = string(runes) + "..."
 		}
 		b.WriteString(lipgloss.NewStyle().Foreground(ColorGreen).Render(
 			fmt.Sprintf("  ✓ Added \"%s\"", added)))
@@ -312,7 +316,16 @@ func (m JukeboxModal) viewNowPlaying(w int) string {
 	}
 
 	// Now playing
-	title := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(state.Current.Title)
+	nowTitle := state.Current.Title
+	maxNowTitle := w - 4
+	if lipgloss.Width(nowTitle) > maxNowTitle {
+		runes := []rune(nowTitle)
+		for lipgloss.Width(string(runes)) > maxNowTitle-3 && len(runes) > 0 {
+			runes = runes[:len(runes)-1]
+		}
+		nowTitle = string(runes) + "..."
+	}
+	title := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(nowTitle)
 	artist := lipgloss.NewStyle().Foreground(ColorSand).Render(state.Current.Artist)
 	source := lipgloss.NewStyle().Foreground(ColorDimmer).Render("[" + state.Current.Source + "]")
 
@@ -409,15 +422,41 @@ func (m JukeboxModal) viewSearch(w int) string {
 
 	if len(m.searchResults) > 0 {
 		b.WriteString("\n")
-		for i, track := range m.searchResults {
-			if i >= 10 {
-				break
-			}
+
+		// Scrolling window: show 5 results around the cursor
+		visible := 5
+		total := len(m.searchResults)
+		start := m.searchCursor - visible/2
+		if start < 0 {
+			start = 0
+		}
+		if start+visible > total {
+			start = total - visible
+		}
+		if start < 0 {
+			start = 0
+		}
+		end := start + visible
+		if end > total {
+			end = total
+		}
+
+		maxTitle := w - 16 // room for " ▸ N. " + " [source]"
+		if maxTitle < 12 {
+			maxTitle = 12
+		}
+
+		for i := start; i < end; i++ {
+			track := m.searchResults[i]
 			isSelected := i == m.searchCursor
 			num := fmt.Sprintf("%d.", i+1)
 			trackTitle := track.Title
-			if len(trackTitle) > 28 {
-				trackTitle = trackTitle[:25] + "..."
+			if lipgloss.Width(trackTitle) > maxTitle {
+				runes := []rune(trackTitle)
+				for lipgloss.Width(string(runes)) > maxTitle-3 && len(runes) > 0 {
+					runes = runes[:len(runes)-1]
+				}
+				trackTitle = string(runes) + "..."
 			}
 			trackSource := "[" + track.Source + "]"
 
@@ -437,6 +476,12 @@ func (m JukeboxModal) viewSearch(w int) string {
 					titleS, sourceS)
 			}
 		}
+
+		if total > visible {
+			b.WriteString(lipgloss.NewStyle().Foreground(ColorDimmer).Render(
+				fmt.Sprintf("  %d of %d results\n", m.searchCursor+1, total)))
+		}
+
 		b.WriteString("\n")
 		jk := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("j/k")
 		enter := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")

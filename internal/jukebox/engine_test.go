@@ -53,15 +53,18 @@ func TestEngineAddRequestDuplicate(t *testing.T) {
 	}
 }
 
-func TestEngineAddRequestRejectsIdle(t *testing.T) {
+func TestEngineAddRequestStartsPlaybackWhenIdle(t *testing.T) {
 	e := NewEngine(nil)
 	// Phase is idle by default
-	track := Track{ID: "1", Title: "Test"}
+	track := Track{ID: "1", Title: "Test", Duration: 180}
 	e.AddRequest("user1", track)
 
 	state := e.State()
-	if len(state.Requests) != 0 {
-		t.Errorf("expected 0 requests in idle phase, got %d", len(state.Requests))
+	if state.Phase != PhasePlaying {
+		t.Errorf("expected PhasePlaying after request in idle, got %v", state.Phase)
+	}
+	if state.Current == nil || state.Current.ID != "1" {
+		t.Error("expected the requested track to start playing")
 	}
 }
 

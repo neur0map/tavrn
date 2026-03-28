@@ -247,7 +247,7 @@ func playTrack(ctx context.Context, r io.Reader, audioLen int64) {
 	cmd := exec.Command("mpv",
 		"--no-video",
 		"--no-terminal",
-		"--no-cache",
+		"--demuxer-max-bytes=2MiB",
 		"-",
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

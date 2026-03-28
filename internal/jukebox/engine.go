@@ -129,11 +129,18 @@ func (e *Engine) UserVotedFor(userFP string) string {
 }
 
 // AddRequest adds a track to the request pool.
+// If the jukebox is idle, the track starts playing immediately.
 func (e *Engine) AddRequest(userFP string, track Track) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	if e.phase == PhaseIdle {
+		// Nothing playing — start this track immediately
+		e.current = &track
+		e.playStart = time.Now()
+		e.phase = PhasePlaying
+		e.notifyChange()
+		e.notifyTrackChange(track)
 		return
 	}
 
