@@ -611,7 +611,7 @@ func (a *App) switchRoom(target string) {
 		a.doLayout() // sets size and screen offset
 		a.gallery.LoadNotes(notes)
 	} else if target == "games" && a.sudokuGame != nil {
-		sv := NewSudokuView(a.sudokuGame, a.session.Fingerprint, a.session.ColorIndex)
+		sv := NewSudokuView(a.sudokuGame, a.session.Fingerprint, a.session.Nickname, a.session.ColorIndex)
 		a.sudokuView = &sv
 		a.doLayout()
 		a.sudokuGame.SetCursor(a.session.Fingerprint, 0, 0)

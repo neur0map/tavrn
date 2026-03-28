@@ -14,14 +14,16 @@ import (
 )
 
 const (
-	boardCols    = 37 // rendered board width in chars
-	boardRows    = 19 // rendered board height in lines
-	checkFlashMs = 5000
+	// Board with 4-char wide cells: │ XX │ XX │ XX ║ XX │ ...
+	// 9 cells × 4 chars + 4 separators (│ at edges and ║ at box boundaries) = 40 chars
+	renderedBoardW = 40
+	checkFlashMs   = 5000
 )
 
 type SudokuView struct {
 	game        *sudoku.Game
 	fingerprint string
+	nickname    string
 	colorIndex  int
 	cursorRow   int
 	cursorCol   int
@@ -33,7 +35,7 @@ type SudokuView struct {
 	height      int
 }
 
-func NewSudokuView(game *sudoku.Game, fingerprint string, colorIndex int) SudokuView {
+func NewSudokuView(game *sudoku.Game, fingerprint, nickname string, colorIndex int) SudokuView {
 	ti := textinput.New()
 	ti.Placeholder = "Chat..."
 	ti.CharLimit = 200
@@ -42,6 +44,7 @@ func NewSudokuView(game *sudoku.Game, fingerprint string, colorIndex int) Sudoku
 	return SudokuView{
 		game:        game,
 		fingerprint: fingerprint,
+		nickname:    nickname,
 		colorIndex:  colorIndex,
 		wrongCells:  make(map[[2]int]time.Time),
 		input:       ti,
@@ -58,7 +61,6 @@ func (s *SudokuView) AddMessage(msg chat.Message) {
 		msg.Timestamp = time.Now()
 	}
 	s.messages = append(s.messages, msg)
-	// Keep last 50 messages
 	if len(s.messages) > 50 {
 		s.messages = s.messages[len(s.messages)-50:]
 	}
@@ -72,7 +74,6 @@ func (s *SudokuView) MarkWrong(positions []sudoku.Position) {
 }
 
 func (s *SudokuView) Tick() {
-	// Expire wrong cell flashes
 	now := time.Now()
 	for k, t := range s.wrongCells {
 		if now.Sub(t) > checkFlashMs*time.Millisecond {
@@ -89,7 +90,6 @@ func (s SudokuView) Update(msg tea.Msg) (SudokuView, tea.Cmd) {
 
 	key := keyMsg.String()
 
-	// Tab toggles focus
 	if key == "tab" {
 		s.focusChat = !s.focusChat
 		if s.focusChat {
@@ -100,11 +100,10 @@ func (s SudokuView) Update(msg tea.Msg) (SudokuView, tea.Cmd) {
 		return s, nil
 	}
 
-	// Chat mode
 	if s.focusChat {
 		switch key {
 		case "enter":
-			// Return value handled by app
+			// handled by app
 		case "esc":
 			s.focusChat = false
 			s.input.Blur()
@@ -117,7 +116,6 @@ func (s SudokuView) Update(msg tea.Msg) (SudokuView, tea.Cmd) {
 		return s, nil
 	}
 
-	// Board mode
 	switch key {
 	case "up", "k":
 		if s.cursorRow > 0 {
@@ -149,19 +147,16 @@ func (s SudokuView) Update(msg tea.Msg) (SudokuView, tea.Cmd) {
 	return s, nil
 }
 
-// ChatInput returns the current chat input and clears it.
 func (s *SudokuView) ChatInput() string {
 	val := s.input.Value()
 	s.input.Reset()
 	return val
 }
 
-// HasChatInput returns true if there's text in the chat input.
 func (s SudokuView) HasChatInput() bool {
 	return s.input.Value() != ""
 }
 
-// FocusChat returns true if chat input is focused.
 func (s SudokuView) FocusChat() bool {
 	return s.focusChat
 }
@@ -169,85 +164,70 @@ func (s SudokuView) FocusChat() bool {
 func (s SudokuView) View() string {
 	board := s.game.Board()
 	cursors := s.game.Cursors()
-	scores := s.game.Scores()
 
-	// Calculate widths
-	chatW := s.width - boardCols - 6
-	if chatW < 15 {
-		chatW = 15
+	// Board takes left side, chat takes the rest
+	chatW := s.width - renderedBoardW - 8
+	if chatW < 20 {
+		chatW = 20
 	}
 
-	// Render board
 	boardView := s.renderBoard(board, cursors)
-
-	// Render chat panel
 	chatView := s.renderChat(chatW)
 
-	// Join board and chat horizontally
-	gap := "  "
+	// Join side by side with a vertical separator
 	boardLines := strings.Split(boardView, "\n")
 	chatLines := strings.Split(chatView, "\n")
 
-	// Pad to same height
-	maxLines := len(boardLines)
-	if len(chatLines) > maxLines {
-		maxLines = len(chatLines)
-	}
-	for len(boardLines) < maxLines {
-		boardLines = append(boardLines, strings.Repeat(" ", boardCols))
-	}
-	for len(chatLines) < maxLines {
-		chatLines = append(chatLines, strings.Repeat(" ", chatW))
+	// Target height for the content area (leave room for status + help)
+	contentH := s.height - 7
+	if contentH < 13 {
+		contentH = 13
 	}
 
+	// Pad both to content height
+	for len(boardLines) < contentH {
+		boardLines = append(boardLines, strings.Repeat(" ", renderedBoardW))
+	}
+	for len(chatLines) < contentH {
+		chatLines = append(chatLines, "")
+	}
+
+	sep := lipgloss.NewStyle().Foreground(ColorDimmer)
 	var combined strings.Builder
-	for i := range maxLines {
-		combined.WriteString(boardLines[i])
-		combined.WriteString(gap)
-		combined.WriteString(chatLines[i])
-		if i < maxLines-1 {
-			combined.WriteString("\n")
+	for i := 0; i < contentH; i++ {
+		bl := boardLines[i]
+		cl := ""
+		if i < len(chatLines) {
+			cl = chatLines[i]
 		}
+		combined.WriteString(bl)
+		combined.WriteString(sep.Render("  │ "))
+		combined.WriteString(cl)
+		combined.WriteString("\n")
 	}
 
-	// Status bar
-	var status strings.Builder
+	// Score line — use nickname
 	dim := lipgloss.NewStyle().Foreground(ColorDim)
-	highlight := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
+	hl := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
 
-	// Scores
-	for fp, sc := range scores {
-		name := fp
-		if len(name) > 12 {
-			name = name[:12]
-		}
-		status.WriteString(dim.Render(fmt.Sprintf("%s:", name)))
-		status.WriteString(highlight.Render(fmt.Sprintf("%d", sc)))
-		status.WriteString(dim.Render("  "))
-	}
-	status.WriteString(dim.Render(fmt.Sprintf("· %s · %d/81",
-		strings.Title(s.game.Difficulty()), s.game.Filled())))
+	myScore := s.game.Score(s.fingerprint)
+	scoreLine := "  " + NickStyle(s.colorIndex).Render(s.nickname) +
+		dim.Render(":") + hl.Render(fmt.Sprintf("%d", myScore)) +
+		dim.Render(fmt.Sprintf("  · %s · %d/81",
+			strings.ToUpper(s.game.Difficulty()[:1])+s.game.Difficulty()[1:],
+			s.game.Filled()))
 
 	// Help line
-	var help strings.Builder
 	k := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
 	d := lipgloss.NewStyle().Foreground(ColorDim)
-	help.WriteString(k.Render("←→↑↓"))
-	help.WriteString(d.Render(" move  "))
-	help.WriteString(k.Render("1-9"))
-	help.WriteString(d.Render(" place  "))
-	help.WriteString(k.Render("x"))
-	help.WriteString(d.Render(" clear  "))
-	help.WriteString(k.Render("C"))
-	help.WriteString(d.Render(fmt.Sprintf(" check(%d)  ", 3)))
-	help.WriteString(k.Render("Tab"))
-	help.WriteString(d.Render(" chat  "))
-	help.WriteString(k.Render("ESC"))
-	help.WriteString(d.Render(" back"))
+	helpLine := "  " + k.Render("←→↑↓") + d.Render(" move  ") +
+		k.Render("1-9") + d.Render(" place  ") +
+		k.Render("x") + d.Render(" clear  ") +
+		k.Render("C") + d.Render(" check(3)  ") +
+		k.Render("Tab") + d.Render(" chat  ") +
+		k.Render("ESC") + d.Render(" back")
 
-	inner := combined.String() + "\n\n" +
-		"  " + status.String() + "\n" +
-		"  " + help.String()
+	inner := combined.String() + "\n" + scoreLine + "\n" + helpLine
 
 	return ChatBorderStyle.Width(s.width).Height(s.height).Padding(1, 1).Render(inner)
 }
@@ -256,67 +236,69 @@ func (s SudokuView) renderBoard(board [9][9]sudoku.Cell, cursors map[string]sudo
 	clue := lipgloss.NewStyle().Foreground(lipgloss.Color("255")).Bold(true)
 	empty := lipgloss.NewStyle().Foreground(ColorDimmer)
 	wrong := lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	cursorStyle := lipgloss.NewStyle().Background(ColorBorder).Foreground(lipgloss.Color("255")).Bold(true)
-	gridLine := lipgloss.NewStyle().Foreground(ColorDimmer)
+	cursorBg := lipgloss.NewStyle().Background(ColorBorder).Foreground(lipgloss.Color("255")).Bold(true)
+	grid := lipgloss.NewStyle().Foreground(ColorDimmer)
+	boxGrid := lipgloss.NewStyle().Foreground(ColorBorder)
 
 	var b strings.Builder
 
 	// Top border
-	b.WriteString(gridLine.Render("┌───────┬───────┬───────┐"))
+	b.WriteString(grid.Render("╔════════════╦════════════╦════════════╗"))
 	b.WriteString("\n")
 
 	for r := 0; r < 9; r++ {
-		b.WriteString(gridLine.Render("│"))
+		b.WriteString(grid.Render("║"))
 		for c := 0; c < 9; c++ {
 			cell := board[r][c]
-			isWrong := false
-			if _, ok := s.wrongCells[[2]int{r, c}]; ok {
-				isWrong = true
-			}
+			_, isWrong := s.wrongCells[[2]int{r, c}]
 			isCursor := r == s.cursorRow && c == s.cursorCol
 
 			var cellStr string
 			if cell.Value == 0 {
-				cellStr = "·"
+				cellStr = " · "
 			} else {
-				cellStr = fmt.Sprintf("%d", cell.Value)
+				cellStr = fmt.Sprintf(" %d ", cell.Value)
 			}
 
-			// Apply style
+			// Style the cell content
 			var styled string
 			switch {
 			case isCursor:
-				styled = cursorStyle.Render(" " + cellStr + " ")
+				styled = cursorBg.Render(cellStr)
 			case isWrong:
-				styled = wrong.Render(" " + cellStr + " ")
+				styled = wrong.Render(cellStr)
 			case cell.IsClue:
-				styled = clue.Render(" " + cellStr + " ")
+				styled = clue.Render(cellStr)
 			case cell.Value == 0:
-				styled = empty.Render(" " + cellStr + " ")
+				styled = empty.Render(cellStr)
 			default:
-				// Player placement — use their color
-				ci := s.colorIndex // default to own color
-				styled = NickStyle(ci).Render(" " + cellStr + " ")
+				styled = NickStyle(s.colorIndex).Render(cellStr)
 			}
 
 			b.WriteString(styled)
 
+			// Column separator
 			if c == 2 || c == 5 {
-				b.WriteString(gridLine.Render("│"))
+				b.WriteString(boxGrid.Render("║"))
+			} else if c < 8 {
+				b.WriteString(grid.Render("│"))
 			}
 		}
-		b.WriteString(gridLine.Render("│"))
+		b.WriteString(grid.Render("║"))
 		b.WriteString("\n")
 
 		// Row separators
 		if r == 2 || r == 5 {
-			b.WriteString(gridLine.Render("├───────┼───────┼───────┤"))
+			b.WriteString(boxGrid.Render("╠════════════╬════════════╬════════════╣"))
+			b.WriteString("\n")
+		} else if r < 8 {
+			b.WriteString(grid.Render("║────────────║────────────║────────────║"))
 			b.WriteString("\n")
 		}
 	}
 
 	// Bottom border
-	b.WriteString(gridLine.Render("└───────┴───────┴───────┘"))
+	b.WriteString(grid.Render("╚════════════╩════════════╩════════════╝"))
 
 	return b.String()
 }
@@ -329,11 +311,11 @@ func (s SudokuView) renderChat(width int) string {
 	var b strings.Builder
 	b.WriteString(header.Render("GAME CHAT"))
 	b.WriteString("\n")
-	b.WriteString(dimmer.Render(strings.Repeat("─", width-2)))
+	b.WriteString(dimmer.Render(strings.Repeat("─", width)))
 	b.WriteString("\n")
 
-	// Show recent messages (fit in available height)
-	chatHeight := s.height - 8 // leave room for header, input, status
+	// Chat area height
+	chatHeight := s.height - 10
 	if chatHeight < 3 {
 		chatHeight = 3
 	}
@@ -350,26 +332,23 @@ func (s SudokuView) renderChat(width int) string {
 		}
 		msg := s.messages[i]
 		if msg.IsSystem {
-			b.WriteString(dim.Render(truncateWidth(msg.Text, width-2)))
+			b.WriteString(dim.Render(truncateWidth(msg.Text, width)))
 			b.WriteString("\n")
 			lines++
 			continue
 		}
 		nick := NickStyle(msg.ColorIndex).Render(truncateWidth(msg.Nickname, 15))
-		text := truncateWidth(msg.Text, width-18)
-		b.WriteString(fmt.Sprintf("%s %s", nick, dim.Render(text)))
-		b.WriteString("\n")
+		text := truncateWidth(msg.Text, width-17)
+		b.WriteString(fmt.Sprintf("%s %s\n", nick, dim.Render(text)))
 		lines++
 	}
 
-	// Pad remaining space
 	for lines < chatHeight {
 		b.WriteString("\n")
 		lines++
 	}
 
-	// Separator and input
-	b.WriteString(dimmer.Render(strings.Repeat("─", width-2)))
+	b.WriteString(dimmer.Render(strings.Repeat("─", width)))
 	b.WriteString("\n")
 	if s.focusChat {
 		b.WriteString(s.input.View())

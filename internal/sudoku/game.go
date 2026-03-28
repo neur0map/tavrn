@@ -69,6 +69,10 @@ func (g *Game) Place(fingerprint string, row, col, value int) int {
 	if g.board[row][col].IsClue {
 		return 0
 	}
+	// Same value already there — no-op
+	if g.board[row][col].Value == value {
+		return 0
+	}
 	g.board[row][col] = Cell{Value: value, PlacedBy: fingerprint}
 	points := -1
 	if g.solution[row][col] == value {
