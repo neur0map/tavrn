@@ -141,9 +141,13 @@ func runServer() {
 		os.MkdirAll(".ssh", 0700)
 	}
 
-	lofi := jukebox.NewLofi()
-	log.Printf("Lofi radio: %d tracks loaded", lofi.TrackCount())
-	jukeboxEngine := jukebox.NewEngine(lofi)
+	catalog := jukebox.NewCatalog()
+	log.Printf("Tavern Radio: %d lofi, %d jazz, %d electronic, %d cantina tracks loaded",
+		catalog.TrackCount(jukebox.GenreLofi),
+		catalog.TrackCount(jukebox.GenreJazz),
+		catalog.TrackCount(jukebox.GenreElectronic),
+		catalog.TrackCount(jukebox.GenreCantina))
+	jukeboxEngine := jukebox.NewEngineWithCatalog(catalog)
 	jukeboxEngine.SetOnlineCount(h.OnlineCount)
 	streamer := jukebox.NewStreamer()
 	streamer.SetOnDurationKnown(func(seconds int) {
