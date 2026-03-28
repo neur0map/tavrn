@@ -20,9 +20,9 @@ type Position struct {
 // Game holds the shared multiplayer state for a single Sudoku puzzle.
 type Game struct {
 	mu         sync.RWMutex
-	puzzle     Board          // starting state (clues only)
-	solution   Board          // answer key
-	board      [9][9]Cell     // current state
+	puzzle     Board      // starting state (clues only)
+	solution   Board      // answer key
+	board      [9][9]Cell // current state
 	scores     map[string]int
 	cursors    map[string]Position
 	started    time.Time
