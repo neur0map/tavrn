@@ -80,3 +80,15 @@ A shared drawing room — r/place in the terminal.
 - Color support via ANSI
 - Canvas persists until weekly reset
 - Watch others draw in real-time
+
+## Federation — Self-Hosted Taverns
+
+Run your own tavern, standalone or linked into a network.
+
+- One binary, one config — spin up a private tavern on your own server
+- Standalone mode: fully isolated, your rules, your rooms, your music
+- Federated mode: taverns discover each other and share a user directory
+- Cross-tavern chat: `/visit tavern.example.com` to hop between servers
+- Each tavern keeps its own identity — custom name, rooms, AI personality
+- Shared global room for cross-tavern talk, local rooms stay private
+- SSH key is your passport across the network — no accounts, same identity everywhere
