@@ -101,7 +101,7 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) seedRooms() error {
-	for _, name := range []string{"lounge", "gallery", "suggestions"} {
+	for _, name := range []string{"lounge", "gallery", "games", "suggestions"} {
 		s.db.Exec(`INSERT OR IGNORE INTO rooms (name) VALUES (?)`, name)
 	}
 	return nil
@@ -369,7 +369,7 @@ func (s *Store) AddRoom(name string) error {
 func (s *Store) AllRooms() []string {
 	rows, err := s.db.Query(`SELECT name FROM rooms ORDER BY created_at ASC`)
 	if err != nil {
-		return []string{"lounge", "gallery", "suggestions"}
+		return []string{"lounge", "gallery", "games", "suggestions"}
 	}
 	defer rows.Close()
 	var rooms []string
@@ -381,7 +381,7 @@ func (s *Store) AllRooms() []string {
 		rooms = append(rooms, name)
 	}
 	if len(rooms) == 0 {
-		return []string{"lounge", "gallery", "suggestions"}
+		return []string{"lounge", "gallery", "games", "suggestions"}
 	}
 	return rooms
 }

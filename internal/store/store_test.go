@@ -169,13 +169,13 @@ func TestPurgeAll(t *testing.T) {
 func TestDefaultRoomsSeeded(t *testing.T) {
 	s := tempStore(t)
 	rooms := s.AllRooms()
-	expected := map[string]bool{"lounge": true, "gallery": true, "suggestions": true}
+	expected := map[string]bool{"lounge": true, "gallery": true, "games": true, "suggestions": true}
 	for _, r := range rooms {
 		if !expected[r] {
 			t.Errorf("unexpected room: %q", r)
 		}
 	}
-	if len(rooms) < 3 {
+	if len(rooms) < 4 {
 		t.Errorf("expected at least 3 rooms, got %d", len(rooms))
 	}
 }

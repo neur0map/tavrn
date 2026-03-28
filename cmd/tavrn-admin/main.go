@@ -19,6 +19,7 @@ import (
 	"tavrn.sh/internal/server"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
+	"tavrn.sh/internal/sudoku"
 )
 
 const bannerFile = ".banner"
@@ -173,6 +174,9 @@ func runServer() {
 		streamer.StreamTrack(track)
 	})
 
+	sudokuGame := sudoku.NewGame("evil")
+	log.Printf("Sudoku: evil puzzle ready (%d clues)", sudokuGame.Filled())
+
 	port := getPort()
 	srv, err := server.New(server.Config{
 		Host:          "0.0.0.0",
@@ -182,6 +186,7 @@ func runServer() {
 		Hub:           h,
 		JukeboxEngine: jukeboxEngine,
 		Streamer:      streamer,
+		SudokuGame:    sudokuGame,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)

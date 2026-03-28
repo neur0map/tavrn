@@ -18,6 +18,7 @@ import (
 	"tavrn.sh/internal/sanitize"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
+	"tavrn.sh/internal/sudoku"
 )
 
 type HubMsg session.Msg
@@ -70,13 +71,17 @@ type App struct {
 	jukeboxModal  JukeboxModal
 	jukeboxEngine *jukebox.Engine
 
+	// Sudoku
+	sudokuView *SudokuView
+	sudokuGame *sudoku.Game
+
 	// Transition animation
 	transSpring harmonica.Spring
 	transPos    float64 // 0.0 = fully hidden, 1.0 = fully revealed
 	transVel    float64
 }
 
-func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(session.Msg), engine *jukebox.Engine) App {
+func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(session.Msg), engine *jukebox.Engine, game *sudoku.Game) App {
 	return App{
 		state:         stateSplash,
 		splash:        NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair),
@@ -92,6 +97,7 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		onSend:        onSend,
 		modal:         ModalNone,
 		jukeboxEngine: engine,
+		sudokuGame:    game,
 	}
 }
 
@@ -140,6 +146,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.state == stateTavern {
 			a.chat.Tick()
+			if a.sudokuView != nil {
+				a.sudokuView.Tick()
+			}
 		}
 		if a.state == stateSplash {
 			a.splash.frame++
@@ -342,6 +351,51 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// Games room: sudoku view
+	if a.session.Room == "games" && a.sudokuView != nil {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			switch msg.String() {
+			case "ctrl+c":
+				return a, tea.Quit
+			case "esc":
+				if a.sudokuView.FocusChat() {
+					// ESC in chat mode just blurs chat (handled by sudoku view)
+				} else {
+					a.switchRoom("lounge")
+					return a, nil
+				}
+			case "enter":
+				if a.sudokuView.FocusChat() && a.sudokuView.HasChatInput() {
+					text := sanitize.CleanChat(a.sudokuView.ChatInput())
+					if text != "" {
+						a.onSend(session.Msg{
+							Type:       session.MsgChat,
+							Text:       text,
+							Room:       a.session.Room,
+							Nickname:   a.session.Nickname,
+							ColorIndex: a.session.ColorIndex,
+						})
+					}
+					return a, nil
+				}
+			case "C":
+				if !a.sudokuView.FocusChat() {
+					wrong, ok := a.sudokuGame.Check(a.session.Fingerprint)
+					if ok {
+						a.sudokuView.MarkWrong(wrong)
+					}
+					return a, nil
+				}
+			}
+		}
+		var cmd tea.Cmd
+		sv := *a.sudokuView
+		sv, cmd = sv.Update(msg)
+		a.sudokuView = &sv
+		return a, cmd
+	}
+
 	// Normal chat rooms
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
@@ -486,13 +540,18 @@ func (a *App) handleHubMsg(msg session.Msg) {
 		if ts.IsZero() {
 			ts = time.Now()
 		}
-		a.chat.AddMessage(chat.Message{
+		chatMsg := chat.Message{
 			Nickname:   msg.Nickname,
 			ColorIndex: msg.ColorIndex,
 			Text:       msg.Text,
 			Room:       msg.Room,
 			Timestamp:  ts,
-		})
+		}
+		if a.session.Room == "games" && a.sudokuView != nil {
+			a.sudokuView.AddMessage(chatMsg)
+		} else {
+			a.chat.AddMessage(chatMsg)
+		}
 	case session.MsgBanner:
 		a.chat.AddMessage(chat.NewBannerMessage(a.session.Room, msg.Text))
 	case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
@@ -551,6 +610,11 @@ func (a *App) switchRoom(target string) {
 		a.gallery = NewGalleryView(a.session.Fingerprint)
 		a.doLayout() // sets size and screen offset
 		a.gallery.LoadNotes(notes)
+	} else if target == "games" && a.sudokuGame != nil {
+		sv := NewSudokuView(a.sudokuGame, a.session.Fingerprint, a.session.ColorIndex)
+		a.sudokuView = &sv
+		a.doLayout()
+		a.sudokuGame.SetCursor(a.session.Fingerprint, 0, 0)
 	} else {
 		// Load chat history
 		history, _ := a.store.RecentMessages(target, 50)
@@ -618,6 +682,9 @@ func (a *App) doLayout() {
 	a.chat.SetSize(chatWidth, mainHeight)
 	a.gallery.SetSize(chatWidth, mainHeight)
 	a.gallery.SetScreenOffset(roomsWidth, topBarHeight)
+	if a.sudokuView != nil {
+		a.sudokuView.SetSize(chatWidth, mainHeight)
+	}
 }
 
 func (a App) View() tea.View {
@@ -682,10 +749,12 @@ func (a App) View() tea.View {
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()
 
-	// Main content: gallery board or chat depending on room
+	// Main content: gallery, sudoku, or chat depending on room
 	var centerView string
 	if a.session.Room == "gallery" {
 		centerView = a.gallery.View()
+	} else if a.session.Room == "games" && a.sudokuView != nil {
+		centerView = a.sudokuView.View()
 	} else {
 		centerView = a.chat.View()
 	}

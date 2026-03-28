@@ -20,6 +20,7 @@ import (
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
+	"tavrn.sh/internal/sudoku"
 	"tavrn.sh/ui"
 )
 
@@ -31,6 +32,7 @@ type Config struct {
 	Hub           *hub.Hub
 	JukeboxEngine *jukebox.Engine
 	Streamer      *jukebox.Streamer
+	SudokuGame    *sudoku.Game
 }
 
 type Server struct {
@@ -154,7 +156,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		s.cfg.Hub.Broadcast(msg.Room, msg)
 	}
 
-	model := ui.NewApp(sess, s.cfg.Store, s.cfg.Hub, onSend, s.cfg.JukeboxEngine)
+	model := ui.NewApp(sess, s.cfg.Store, s.cfg.Hub, onSend, s.cfg.JukeboxEngine, s.cfg.SudokuGame)
 	return model, nil
 }
 
