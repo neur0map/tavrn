@@ -129,7 +129,7 @@ func runServer() {
 	var backends []jukebox.MusicBackend
 	lofi := jukebox.NewLofi()
 	backends = append(backends, lofi)
-	log.Printf("Lofi backend enabled (%d tracks)", len(lofi.Tracks()))
+	log.Printf("Lofi backend enabled (%d tracks)", lofi.TrackCount())
 	var ytBackend *jukebox.YouTube
 	if _, err := exec.LookPath("yt-dlp"); err == nil {
 		ytProxy := os.Getenv("YT_PROXY")

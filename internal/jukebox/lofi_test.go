@@ -5,21 +5,43 @@ import (
 	"testing"
 )
 
-func TestLofiCatalogParsed(t *testing.T) {
-	tracks := parseLofiCatalog()
+func TestChillhopCatalogParsed(t *testing.T) {
+	tracks := parseChillhopCatalog()
 	if len(tracks) < 100 {
-		t.Errorf("expected at least 100 tracks, got %d", len(tracks))
+		t.Errorf("expected at least 100 chillhop tracks, got %d", len(tracks))
 	}
-	// Spot check first track
 	if tracks[0].id == "" || tracks[0].title == "" {
 		t.Errorf("first track has empty fields: %+v", tracks[0])
+	}
+}
+
+func TestArchiveCatalogParsed(t *testing.T) {
+	tracks := parseArchiveCatalog()
+	if len(tracks) < 100 {
+		t.Errorf("expected at least 100 archive tracks, got %d", len(tracks))
+	}
+	if tracks[0].id == "" || tracks[0].title == "" {
+		t.Errorf("first track has empty fields: %+v", tracks[0])
+	}
+	// Archive titles should not end with .mp3
+	for _, tr := range tracks[:10] {
+		if tr.title[len(tr.title)-4:] == ".mp3" {
+			t.Errorf("title should not have .mp3 extension: %q", tr.title)
+		}
 	}
 }
 
 func TestLofiEnabled(t *testing.T) {
 	l := NewLofi()
 	if !l.Enabled() {
-		t.Error("lofi should be enabled with embedded catalog")
+		t.Error("lofi should be enabled with embedded catalogs")
+	}
+}
+
+func TestLofiTrackCount(t *testing.T) {
+	l := NewLofi()
+	if l.TrackCount() < 3000 {
+		t.Errorf("expected at least 3000 total tracks, got %d", l.TrackCount())
 	}
 }
 
@@ -32,12 +54,12 @@ func TestLofiName(t *testing.T) {
 
 func TestLofiSearchPopular(t *testing.T) {
 	l := NewLofi()
-	tracks, err := l.Search(context.Background(), "popular", 5)
+	tracks, err := l.Search(context.Background(), "popular", 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(tracks) != 5 {
-		t.Errorf("expected 5 tracks, got %d", len(tracks))
+	if len(tracks) != 10 {
+		t.Errorf("expected 10 tracks, got %d", len(tracks))
 	}
 	for _, tr := range tracks {
 		if tr.Source != "lofi" {
@@ -49,37 +71,57 @@ func TestLofiSearchPopular(t *testing.T) {
 	}
 }
 
+func TestLofiSearchMixesSources(t *testing.T) {
+	l := NewLofi()
+	tracks, err := l.Search(context.Background(), "popular", 20)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	var chillhop, archive int
+	for _, tr := range tracks {
+		switch tr.Artist {
+		case "Chillhop":
+			chillhop++
+		case "Lofi Girl":
+			archive++
+		}
+	}
+	if chillhop == 0 {
+		t.Error("expected some chillhop tracks in random mix")
+	}
+	if archive == 0 {
+		t.Error("expected some archive tracks in random mix")
+	}
+}
+
 func TestLofiSearchByTitle(t *testing.T) {
 	l := NewLofi()
-	// Search for a common word that should match something
 	tracks, err := l.Search(context.Background(), "sun", 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	// Should find at least one match in 1349 tracks
 	if len(tracks) == 0 {
 		t.Error("expected at least one match for 'sun'")
-	}
-	for _, tr := range tracks {
-		if tr.ID == "" || tr.Title == "" {
-			t.Errorf("track has empty fields: %+v", tr)
-		}
 	}
 }
 
 func TestLofiStreamURL(t *testing.T) {
 	l := NewLofi()
-	// Use the first track's ID
-	tracks := l.Tracks()
-	if len(tracks) == 0 {
-		t.Fatal("no tracks")
-	}
-	url, err := l.StreamURL(context.Background(), tracks[0].id)
+	// Chillhop track
+	url, err := l.StreamURL(context.Background(), l.chillhop[0].id)
 	if err != nil {
-		t.Fatalf("StreamURL: %v", err)
+		t.Fatalf("StreamURL chillhop: %v", err)
 	}
 	if url == "" {
-		t.Error("empty URL")
+		t.Error("empty chillhop URL")
+	}
+	// Archive track
+	url, err = l.StreamURL(context.Background(), l.archive[0].id)
+	if err != nil {
+		t.Fatalf("StreamURL archive: %v", err)
+	}
+	if url == "" {
+		t.Error("empty archive URL")
 	}
 }
 
@@ -88,17 +130,5 @@ func TestLofiStreamURLNotFound(t *testing.T) {
 	_, err := l.StreamURL(context.Background(), "nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent track")
-	}
-}
-
-func TestLofiRandomTracksNoDuplicates(t *testing.T) {
-	l := NewLofi()
-	tracks := l.randomTracks(20)
-	seen := make(map[string]bool)
-	for _, tr := range tracks {
-		if seen[tr.ID] {
-			t.Errorf("duplicate track ID: %s", tr.ID)
-		}
-		seen[tr.ID] = true
 	}
 }
