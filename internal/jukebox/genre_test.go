@@ -1,17 +1,17 @@
-// internal/jukebox/genre_test.go
 package jukebox
 
 import "testing"
 
 func TestGenreString(t *testing.T) {
+	_ = NewCatalog() // populates genreNames from config
 	tests := []struct {
 		g    Genre
 		want string
 	}{
-		{GenreLofi, "Lofi"},
-		{GenreJazz, "Jazz"},
-		{GenreElectronic, "Electronic"},
-		{GenreCantina, "Cantina"},
+		{Genre(0), "Lofi"},
+		{Genre(1), "Jazz"},
+		{Genre(2), "Electronic"},
+		{Genre(3), "Cantina"},
 	}
 	for _, tt := range tests {
 		if got := tt.g.String(); got != tt.want {
@@ -21,11 +21,12 @@ func TestGenreString(t *testing.T) {
 }
 
 func TestAllGenres(t *testing.T) {
+	_ = NewCatalog()
 	genres := AllGenres()
-	if len(genres) != 4 {
-		t.Errorf("expected 4 genres, got %d", len(genres))
+	if len(genres) < 4 {
+		t.Errorf("expected at least 4 genres, got %d", len(genres))
 	}
-	if genres[0] != GenreLofi {
+	if genres[0].String() != "Lofi" {
 		t.Errorf("first genre should be Lofi, got %s", genres[0])
 	}
 }

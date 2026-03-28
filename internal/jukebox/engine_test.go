@@ -5,8 +5,12 @@ import (
 	"time"
 )
 
+func newTestEngine() *Engine {
+	return NewEngineWithCatalog(NewCatalog())
+}
+
 func TestEngineInitialState(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	state := e.State()
 	if state.Current != nil {
 		t.Error("expected no current track before first tick")
@@ -14,7 +18,7 @@ func TestEngineInitialState(t *testing.T) {
 }
 
 func TestEngineAutoPicksOnFirstTick(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	e.tick()
 	state := e.State()
 	if state.Current == nil {
@@ -23,7 +27,7 @@ func TestEngineAutoPicksOnFirstTick(t *testing.T) {
 }
 
 func TestEngineAutoNextOnTrackEnd(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	e.tick()
 
 	e.mu.Lock()
@@ -40,8 +44,8 @@ func TestEngineAutoNextOnTrackEnd(t *testing.T) {
 }
 
 func TestEngineWaitsForDuration(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.tick() // picks first track, duration = 0
+	e := newTestEngine()
+	e.tick()
 
 	state := e.State()
 	if state.Current == nil {
@@ -51,7 +55,6 @@ func TestEngineWaitsForDuration(t *testing.T) {
 		t.Errorf("expected duration 0, got %d", state.Current.Duration)
 	}
 
-	// Tick again — should NOT pick a new track (waiting for ffprobe)
 	firstID := state.Current.ID
 	e.tick()
 	if e.State().Current.ID != firstID {
@@ -60,7 +63,7 @@ func TestEngineWaitsForDuration(t *testing.T) {
 }
 
 func TestEngineUpdateDuration(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	e.tick()
 
 	e.UpdateDuration(200)
@@ -70,7 +73,7 @@ func TestEngineUpdateDuration(t *testing.T) {
 }
 
 func TestEngineListeners(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	e.SetOnlineCount(func() int { return 7 })
 	state := e.State()
 	if state.Listeners != 7 {
@@ -79,7 +82,7 @@ func TestEngineListeners(t *testing.T) {
 }
 
 func TestEngineTrackChangeCallback(t *testing.T) {
-	e := NewEngine(NewLofi())
+	e := newTestEngine()
 	called := false
 	e.SetOnTrackChange(func(track Track) {
 		called = true
@@ -91,44 +94,40 @@ func TestEngineTrackChangeCallback(t *testing.T) {
 }
 
 func TestEngineDefaultGenreIsLofi(t *testing.T) {
-	c := NewCatalog()
-	e := NewEngineWithCatalog(c)
+	e := newTestEngine()
 	state := e.State()
-	if state.ActiveGenre != GenreLofi {
+	if state.ActiveGenre.String() != "Lofi" {
 		t.Errorf("default genre = %s, want Lofi", state.ActiveGenre)
 	}
 }
 
 func TestEngineSetGenrePending(t *testing.T) {
-	c := NewCatalog()
-	e := NewEngineWithCatalog(c)
-	e.SetGenre(GenreJazz)
+	e := newTestEngine()
+	e.SetGenre(Genre(1)) // Jazz
 	state := e.State()
-	if state.PendingGenre != GenreJazz {
+	if state.PendingGenre.String() != "Jazz" {
 		t.Errorf("pending genre = %s, want Jazz", state.PendingGenre)
 	}
-	if state.ActiveGenre != GenreLofi {
+	if state.ActiveGenre.String() != "Lofi" {
 		t.Errorf("active genre should still be Lofi before track change, got %s", state.ActiveGenre)
 	}
 }
 
 func TestEngineGenreSwitchOnNextTrack(t *testing.T) {
-	c := NewCatalog()
-	e := NewEngineWithCatalog(c)
-	e.tick() // picks first lofi track
+	e := newTestEngine()
+	e.tick()
 
-	e.SetGenre(GenreJazz)
+	e.SetGenre(Genre(1)) // Jazz
 
-	// Force track to end
 	e.mu.Lock()
 	e.current.Duration = 1
 	e.playStart = time.Now().Add(-2 * time.Second)
 	e.mu.Unlock()
 
-	e.tick() // should switch to jazz
+	e.tick()
 
 	state := e.State()
-	if state.ActiveGenre != GenreJazz {
+	if state.ActiveGenre.String() != "Jazz" {
 		t.Errorf("active genre = %s, want Jazz after track end", state.ActiveGenre)
 	}
 	if state.Current == nil {

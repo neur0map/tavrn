@@ -27,10 +27,6 @@ type Engine struct {
 	onTrackChange func(Track)
 }
 
-func NewEngine(lofi *Lofi) *Engine {
-	return &Engine{catalog: &Catalog{lofi: lofi}}
-}
-
 func NewEngineWithCatalog(c *Catalog) *Engine {
 	return &Engine{catalog: c}
 }
