@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"context"
 	"fmt"
 	"image/color"
 	"math"
@@ -154,22 +153,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, doTick(a.nextTickInterval())
 
-	case JukeboxAddMsg:
+	case JukeboxSkipMsg:
 		if a.jukeboxEngine != nil {
-			a.jukeboxEngine.AddRequest(a.session.Fingerprint, msg.Track)
+			a.jukeboxEngine.VoteSkip(a.session.Fingerprint)
 		}
 		return a, nil
-
-	case JukeboxVoteMsg:
-		if a.jukeboxEngine != nil {
-			a.jukeboxEngine.Vote(a.session.Fingerprint, msg.TrackID)
-		}
-		return a, nil
-
-	case JukeboxSearchResultMsg:
-		var cmd tea.Cmd
-		a.jukeboxModal, cmd = a.jukeboxModal.Update(msg)
-		return a, cmd
 
 	case HubMsg:
 		inner := session.Msg(msg)
@@ -395,10 +383,6 @@ func (a App) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ModalJukebox:
 		var cmd tea.Cmd
 		a.jukeboxModal, cmd = a.jukeboxModal.Update(msg)
-		if query, ok := a.jukeboxModal.SearchQuery(); ok {
-			searchCmd := a.jukeboxSearch(query)
-			return a, tea.Batch(cmd, searchCmd)
-		}
 		return a, cmd
 	case ModalNick:
 		var cmd tea.Cmd
@@ -677,7 +661,6 @@ func (a App) View() tea.View {
 			a.topBar.HasTrack = true
 			a.topBar.NowTitle = jstate.Current.Title
 			a.topBar.NowArtist = jstate.Current.Artist
-			a.topBar.NowSource = jstate.Current.Source
 			a.topBar.NowDuration = jstate.Current.DurationTime()
 			a.topBar.NowPosition = jstate.Position
 			a.online.NowTitle = jstate.Current.Title
@@ -685,7 +668,6 @@ func (a App) View() tea.View {
 			a.topBar.HasTrack = false
 			a.online.NowTitle = ""
 		}
-		a.online.Queue = jstate.Requests
 	}
 
 	topBar := a.topBar.View()
@@ -768,41 +750,6 @@ func (a App) hasActiveTrack() bool {
 		return false
 	}
 	return a.jukeboxEngine.State().Current != nil
-}
-
-func (a App) jukeboxSearch(query string) tea.Cmd {
-	return func() tea.Msg {
-		if a.jukeboxEngine == nil {
-			return JukeboxSearchResultMsg{Err: fmt.Errorf("jukebox not available")}
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		type result struct {
-			tracks []jukebox.Track
-			err    error
-		}
-
-		backends := a.jukeboxEngine.Backends()
-		ch := make(chan result, len(backends))
-		for _, b := range backends {
-			go func(backend jukebox.MusicBackend) {
-				tracks, err := backend.Search(ctx, query, 5)
-				ch <- result{tracks, err}
-			}(b)
-		}
-
-		var allTracks []jukebox.Track
-		for range backends {
-			r := <-ch
-			if r.err == nil {
-				allTracks = append(allTracks, r.tracks...)
-			}
-		}
-
-		return JukeboxSearchResultMsg{Results: allTracks}
-	}
 }
 
 // renderTransition applies a spring-animated top-down wipe reveal.

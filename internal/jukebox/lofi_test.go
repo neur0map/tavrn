@@ -1,9 +1,6 @@
 package jukebox
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
 func TestChillhopCatalogParsed(t *testing.T) {
 	tracks := parseChillhopCatalog()
@@ -23,18 +20,10 @@ func TestArchiveCatalogParsed(t *testing.T) {
 	if tracks[0].id == "" || tracks[0].title == "" {
 		t.Errorf("first track has empty fields: %+v", tracks[0])
 	}
-	// Archive titles should not end with .mp3
 	for _, tr := range tracks[:10] {
 		if tr.title[len(tr.title)-4:] == ".mp3" {
 			t.Errorf("title should not have .mp3 extension: %q", tr.title)
 		}
-	}
-}
-
-func TestLofiEnabled(t *testing.T) {
-	l := NewLofi()
-	if !l.Enabled() {
-		t.Error("lofi should be enabled with embedded catalogs")
 	}
 }
 
@@ -45,38 +34,25 @@ func TestLofiTrackCount(t *testing.T) {
 	}
 }
 
-func TestLofiName(t *testing.T) {
+func TestLofiRandomTracks(t *testing.T) {
 	l := NewLofi()
-	if l.Name() != "lofi" {
-		t.Errorf("name = %q, want lofi", l.Name())
-	}
-}
-
-func TestLofiSearchPopular(t *testing.T) {
-	l := NewLofi()
-	tracks, err := l.Search(context.Background(), "popular", 10)
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
+	tracks := l.randomTracks(10)
 	if len(tracks) != 10 {
 		t.Errorf("expected 10 tracks, got %d", len(tracks))
 	}
 	for _, tr := range tracks {
-		if tr.Source != "lofi" {
-			t.Errorf("source = %q, want lofi", tr.Source)
-		}
 		if tr.URL == "" {
 			t.Error("track has empty URL")
+		}
+		if tr.Title == "" {
+			t.Error("track has empty title")
 		}
 	}
 }
 
-func TestLofiSearchMixesSources(t *testing.T) {
+func TestLofiRandomMixesSources(t *testing.T) {
 	l := NewLofi()
-	tracks, err := l.Search(context.Background(), "popular", 20)
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
+	tracks := l.randomTracks(20)
 	var chillhop, archive int
 	for _, tr := range tracks {
 		switch tr.Artist {
@@ -87,48 +63,9 @@ func TestLofiSearchMixesSources(t *testing.T) {
 		}
 	}
 	if chillhop == 0 {
-		t.Error("expected some chillhop tracks in random mix")
+		t.Error("expected some chillhop tracks")
 	}
 	if archive == 0 {
-		t.Error("expected some archive tracks in random mix")
-	}
-}
-
-func TestLofiSearchByTitle(t *testing.T) {
-	l := NewLofi()
-	tracks, err := l.Search(context.Background(), "sun", 10)
-	if err != nil {
-		t.Fatalf("Search: %v", err)
-	}
-	if len(tracks) == 0 {
-		t.Error("expected at least one match for 'sun'")
-	}
-}
-
-func TestLofiStreamURL(t *testing.T) {
-	l := NewLofi()
-	// Chillhop track
-	url, err := l.StreamURL(context.Background(), l.chillhop[0].id)
-	if err != nil {
-		t.Fatalf("StreamURL chillhop: %v", err)
-	}
-	if url == "" {
-		t.Error("empty chillhop URL")
-	}
-	// Archive track
-	url, err = l.StreamURL(context.Background(), l.archive[0].id)
-	if err != nil {
-		t.Fatalf("StreamURL archive: %v", err)
-	}
-	if url == "" {
-		t.Error("empty archive URL")
-	}
-}
-
-func TestLofiStreamURLNotFound(t *testing.T) {
-	l := NewLofi()
-	_, err := l.StreamURL(context.Background(), "nonexistent")
-	if err == nil {
-		t.Error("expected error for nonexistent track")
+		t.Error("expected some archive tracks")
 	}
 }

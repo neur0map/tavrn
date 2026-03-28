@@ -105,21 +105,6 @@ func (s *Streamer) StreamTrack(track Track) {
 	go s.downloadAndBroadcast(ctx, track)
 }
 
-// StreamTrackWithAudio broadcasts pre-downloaded audio data for a track.
-// Used for YouTube tracks where audio is downloaded via yt-dlp.
-func (s *Streamer) StreamTrackWithAudio(track Track, audio []byte) {
-	s.mu.Lock()
-	if s.cancel != nil {
-		s.cancel()
-	}
-	s.cancel = nil
-	s.currentTrack = &track
-	s.audioData = nil
-	s.mu.Unlock()
-
-	go s.broadcastAudio(track, audio)
-}
-
 // Stop cancels the current download.
 func (s *Streamer) Stop() {
 	s.mu.Lock()
@@ -193,40 +178,6 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 	}
 
 	// Remove failed connections
-	if len(failed) > 0 {
-		s.mu.Lock()
-		for _, conn := range failed {
-			delete(s.conns, conn)
-			conn.Close()
-		}
-		s.mu.Unlock()
-	}
-}
-
-func (s *Streamer) broadcastAudio(track Track, audio []byte) {
-	estimatedDuration := estimateMP3Duration(audio)
-	log.Printf("streamer: received %d bytes (~%ds), broadcasting to %d conns",
-		len(audio), estimatedDuration, s.ConnCount())
-
-	s.mu.Lock()
-	if s.onDurationKnown != nil {
-		go s.onDurationKnown(estimatedDuration)
-	}
-	s.audioData = audio
-	s.playStart = time.Now()
-	conns := make([]io.WriteCloser, 0, len(s.conns))
-	for conn := range s.conns {
-		conns = append(conns, conn)
-	}
-	s.mu.Unlock()
-
-	var failed []io.WriteCloser
-	for _, conn := range conns {
-		if err := s.sendTrack(conn, track, audio); err != nil {
-			failed = append(failed, conn)
-		}
-	}
-
 	if len(failed) > 0 {
 		s.mu.Lock()
 		for _, conn := range failed {

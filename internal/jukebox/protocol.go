@@ -13,7 +13,6 @@ type TrackHeader struct {
 	Title    string `json:"title"`
 	Artist   string `json:"artist"`
 	Duration int    `json:"duration"`
-	Source   string `json:"source"`
 }
 
 // TrackFrame is a complete track: header + audio data.
@@ -29,7 +28,6 @@ func EncodeTrackHeader(w io.Writer, track Track) error {
 		Title:    track.Title,
 		Artist:   track.Artist,
 		Duration: track.Duration,
-		Source:   track.Source,
 	}
 	data, err := json.Marshal(header)
 	if err != nil {

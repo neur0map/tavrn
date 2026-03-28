@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"tavrn.sh/internal/jukebox"
 )
 
 type ModalType int
@@ -552,10 +551,3 @@ func (a AdminConfirmModal) View(width, height int) string {
 		Padding(1, 2).
 		Render(b5.String())
 }
-
-// ─────────────────────────────────────
-// Jukebox Messages
-// ─────────────────────────────────────
-
-type JukeboxAddMsg struct{ Track jukebox.Track }
-type JukeboxVoteMsg struct{ TrackID string }

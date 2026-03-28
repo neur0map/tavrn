@@ -6,231 +6,137 @@ import (
 )
 
 func TestEngineInitialState(t *testing.T) {
-	e := NewEngine(nil)
+	e := NewEngine(NewLofi())
 	state := e.State()
-	if state.Phase != PhaseIdle {
-		t.Errorf("expected PhaseIdle, got %v", state.Phase)
-	}
 	if state.Current != nil {
-		t.Errorf("expected no current track")
+		t.Error("expected no current track before first tick")
 	}
 }
 
-func TestEngineAddRequest(t *testing.T) {
-	e := NewEngine(nil)
+func TestEngineAutoPicksOnFirstTick(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.tick()
+	state := e.State()
+	if state.Current == nil {
+		t.Error("expected a track after first tick")
+	}
+}
+
+func TestEngineAutoNextOnTrackEnd(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.tick() // picks first track
+
+	// Simulate track ending
 	e.mu.Lock()
-	e.phase = PhasePlaying
+	e.current.Duration = 1
+	e.playStart = time.Now().Add(-2 * time.Second)
+	firstID := e.current.ID
 	e.mu.Unlock()
 
-	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
-	e.AddRequest("user1", track)
+	e.tick() // should pick next track
 
 	state := e.State()
-	if len(state.Requests) != 1 {
-		t.Fatalf("expected 1 request, got %d", len(state.Requests))
+	if state.Current == nil {
+		t.Fatal("expected a track after auto-next")
 	}
-	if state.Requests[0].Count != 1 {
-		t.Errorf("expected count 1, got %d", state.Requests[0].Count)
-	}
+	// It's random, so it might pick the same track, but at least it shouldn't be nil
+	_ = firstID
 }
 
-func TestEngineAddRequestDuplicate(t *testing.T) {
-	e := NewEngine(nil)
-	e.mu.Lock()
-	e.phase = PhasePlaying
-	e.mu.Unlock()
-
-	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
-	e.AddRequest("user1", track)
-	e.AddRequest("user2", track)
-
-	state := e.State()
-	if len(state.Requests) != 1 {
-		t.Fatalf("expected 1 request, got %d", len(state.Requests))
-	}
-	if state.Requests[0].Count != 2 {
-		t.Errorf("expected count 2, got %d", state.Requests[0].Count)
-	}
-}
-
-func TestEngineAddRequestStartsPlaybackWhenIdle(t *testing.T) {
-	e := NewEngine(nil)
-	// Phase is idle by default
-	track := Track{ID: "1", Title: "Test", Duration: 180}
-	e.AddRequest("user1", track)
-
-	state := e.State()
-	if state.Phase != PhasePlaying {
-		t.Errorf("expected PhasePlaying after request in idle, got %v", state.Phase)
-	}
-	if state.Current == nil || state.Current.ID != "1" {
-		t.Error("expected the requested track to start playing")
-	}
-}
-
-func TestEngineVote(t *testing.T) {
-	e := NewEngine(nil)
-	track := Track{ID: "1", Title: "Test", Artist: "Artist", Source: "jamendo"}
-
-	e.mu.Lock()
-	e.phase = PhasePlaying
-	e.requestPool["1"] = &Request{Track: track, Count: 1, Voters: make(map[string]bool)}
-	e.mu.Unlock()
-
-	ok := e.Vote("user1", "1")
-	if !ok {
-		t.Error("expected vote to succeed")
-	}
-
-	// Same user, same track — should fail
-	ok = e.Vote("user1", "1")
-	if ok {
-		t.Error("expected duplicate vote to fail")
-	}
-
-	// Check vote counted
-	state := e.State()
-	if state.Requests[0].Votes != 1 {
-		t.Errorf("expected 1 vote, got %d", state.Requests[0].Votes)
-	}
-}
-
-func TestEngineVoteSwitching(t *testing.T) {
-	e := NewEngine(nil)
-	trackA := Track{ID: "a", Title: "A"}
-	trackB := Track{ID: "b", Title: "B"}
-
-	e.mu.Lock()
-	e.phase = PhasePlaying
-	e.requestPool["a"] = &Request{Track: trackA, Count: 1, Voters: make(map[string]bool)}
-	e.requestPool["b"] = &Request{Track: trackB, Count: 1, Voters: make(map[string]bool)}
-	e.mu.Unlock()
-
-	e.Vote("user1", "a")
-	if e.UserVotedFor("user1") != "a" {
-		t.Error("expected user1 voted for a")
-	}
-
-	// Switch vote to b
-	ok := e.Vote("user1", "b")
-	if !ok {
-		t.Error("expected vote switch to succeed")
-	}
-	if e.UserVotedFor("user1") != "b" {
-		t.Error("expected user1 voted for b after switch")
-	}
-
-	state := e.State()
-	for _, r := range state.Requests {
-		if r.Track.ID == "a" && r.Votes != 0 {
-			t.Errorf("expected 0 votes on a after switch, got %d", r.Votes)
-		}
-		if r.Track.ID == "b" && r.Votes != 1 {
-			t.Errorf("expected 1 vote on b after switch, got %d", r.Votes)
-		}
-	}
-}
-
-func TestEngineVoteNotInPool(t *testing.T) {
-	e := NewEngine(nil)
-	e.mu.Lock()
-	e.phase = PhasePlaying
-	e.mu.Unlock()
-
-	ok := e.Vote("user1", "nonexistent")
-	if ok {
-		t.Error("expected vote for nonexistent track to fail")
-	}
-}
-
-func TestEnginePickWinner(t *testing.T) {
-	e := NewEngine(nil)
-
-	e.mu.Lock()
-	e.phase = PhasePlaying
-	e.requestPool = map[string]*Request{
-		"a": {Track: Track{ID: "a", Title: "A"}, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
-		"b": {Track: Track{ID: "b", Title: "B"}, Count: 1, Votes: 2, Voters: map[string]bool{"u2": true, "u3": true}},
-	}
-	e.mu.Unlock()
-
-	winner := e.FinishTrack()
-	if winner == nil {
-		t.Fatal("expected a winner")
-	}
-	if winner.ID != "b" {
-		t.Errorf("expected winner 'b' (2 votes), got '%s'", winner.ID)
-	}
-}
-
-func TestEngineTickTrackEnds(t *testing.T) {
-	e := NewEngine(nil)
-
-	track := Track{ID: "1", Title: "Test", Duration: 100}
-	e.mu.Lock()
-	e.current = &track
-	e.playStart = time.Now().Add(-101 * time.Second)
-	e.phase = PhasePlaying
-	e.mu.Unlock()
-
+func TestEngineVoteSkipInstant(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 3 }) // <= 5, threshold = 1
 	e.tick()
 
-	state := e.State()
-	// No backends, no requests — should go idle
-	if state.Phase != PhaseIdle {
-		t.Errorf("expected PhaseIdle after track ends with no requests/backends, got %v", state.Phase)
+	skipped := e.VoteSkip("user1")
+	if !skipped {
+		t.Error("expected instant skip with <= 5 online")
 	}
 }
 
-func TestEngineTickWithWinner(t *testing.T) {
-	e := NewEngine(nil)
-
-	track := Track{ID: "1", Title: "Current", Duration: 100}
-	nextTrack := Track{ID: "2", Title: "Next"}
-
-	e.mu.Lock()
-	e.current = &track
-	e.playStart = time.Now().Add(-101 * time.Second)
-	e.phase = PhasePlaying
-	e.requestPool = map[string]*Request{
-		"2": {Track: nextTrack, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
-	}
-	e.mu.Unlock()
-
+func TestEngineVoteSkipThreshold(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 10 }) // threshold = 3 + (10-6)/10 = 3
 	e.tick()
 
-	state := e.State()
-	if state.Phase != PhasePlaying {
-		t.Errorf("expected PhasePlaying after winner picked, got %v", state.Phase)
+	if e.VoteSkip("user1") {
+		t.Error("should not skip with 1/3 votes")
 	}
-	if state.Current == nil || state.Current.ID != "2" {
-		t.Error("expected current track to be the winner")
+	if e.VoteSkip("user2") {
+		t.Error("should not skip with 2/3 votes")
+	}
+	if !e.VoteSkip("user3") {
+		t.Error("should skip with 3/3 votes")
 	}
 }
 
-func TestEngineFinishTrack(t *testing.T) {
-	e := NewEngine(nil)
-	track := Track{ID: "1", Title: "Test"}
-	nextTrack := Track{ID: "2", Title: "Next"}
+func TestEngineVoteSkipDeduplicate(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 10 })
+	e.tick()
 
-	e.mu.Lock()
-	e.current = &track
-	e.phase = PhasePlaying
-	e.requestPool = map[string]*Request{
-		"2": {Track: nextTrack, Count: 1, Votes: 1, Voters: map[string]bool{"u1": true}},
-	}
-	e.mu.Unlock()
-
-	winner := e.FinishTrack()
-	if winner == nil || winner.ID != "2" {
-		t.Errorf("expected winner '2', got %v", winner)
-	}
+	e.VoteSkip("user1")
+	e.VoteSkip("user1") // duplicate
+	e.VoteSkip("user1") // duplicate
 
 	state := e.State()
-	if state.Phase != PhasePlaying {
-		t.Errorf("expected PhasePlaying after finish, got %v", state.Phase)
+	if state.SkipVotes != 1 {
+		t.Errorf("expected 1 vote after dedup, got %d", state.SkipVotes)
 	}
-	if state.Current == nil || state.Current.ID != "2" {
-		t.Error("expected current track to be the winner")
+}
+
+func TestEngineSkipResetsOnNewTrack(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 3 })
+	e.tick()
+
+	e.VoteSkip("user1") // instant skip, resets voters
+
+	state := e.State()
+	if state.SkipVotes != 0 {
+		t.Errorf("expected 0 skip votes after track change, got %d", state.SkipVotes)
+	}
+}
+
+func TestEngineUserSkipped(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 20 })
+	e.tick()
+
+	if e.UserSkipped("user1") {
+		t.Error("user1 should not have voted yet")
+	}
+	e.VoteSkip("user1")
+	if !e.UserSkipped("user1") {
+		t.Error("user1 should have voted")
+	}
+}
+
+func TestEngineUpdateDuration(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.tick()
+
+	e.UpdateDuration(200)
+	if e.State().Current.Duration != 200 {
+		t.Errorf("duration = %d, want 200", e.State().Current.Duration)
+	}
+}
+
+func TestSkipThreshold(t *testing.T) {
+	tests := []struct {
+		online    int
+		threshold int
+	}{
+		{1, 1}, {3, 1}, {5, 1},
+		{6, 3}, {10, 3}, {15, 3},
+		{16, 4}, {25, 4},
+		{26, 5}, {35, 5},
+		{36, 6},
+	}
+	for _, tt := range tests {
+		got := skipThreshold(tt.online)
+		if got != tt.threshold {
+			t.Errorf("skipThreshold(%d) = %d, want %d", tt.online, got, tt.threshold)
+		}
 	}
 }

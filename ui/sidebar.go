@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"tavrn.sh/internal/jukebox"
 )
 
 type RoomInfo struct {
@@ -73,7 +72,6 @@ const maxVisibleUsers = 5
 
 type OnlinePanel struct {
 	Users    []string
-	Queue    []jukebox.Request // populated from engine state
 	NowTitle string
 	Width    int
 	Height   int
@@ -122,44 +120,17 @@ func (o OnlinePanel) View() string {
 		}
 	}
 
-	// ── Up Next section ──
-	if o.NowTitle != "" || len(o.Queue) > 0 {
+	// ── Now Playing section ──
+	if o.NowTitle != "" {
 		b.WriteString("\n")
-		b.WriteString(header.Render("UP NEXT"))
+		b.WriteString(header.Render("NOW PLAYING"))
 		b.WriteString("\n")
 		b.WriteString(sep)
 		b.WriteString("\n")
-
-		if o.NowTitle != "" {
-			note := lipgloss.NewStyle().Foreground(ColorMusic).Render("♪")
-			title := truncateWidth(o.NowTitle, o.Width-6)
-			nowStyle := lipgloss.NewStyle().Foreground(ColorHighlight).Render(title)
-			fmt.Fprintf(&b, "%s %s\n", note, nowStyle)
-		}
-
-		if len(o.Queue) > 0 {
-			if o.NowTitle != "" {
-				b.WriteString("\n")
-			}
-			limit := 5
-			if len(o.Queue) < limit {
-				limit = len(o.Queue)
-			}
-			for i := 0; i < limit; i++ {
-				req := o.Queue[i]
-				title := truncateWidth(req.Track.Title, o.Width-8)
-				num := dimmer.Render(fmt.Sprintf("%d.", i+1))
-				name := dim.Render(title)
-				count := dimmer.Render(fmt.Sprintf(" %d", req.Count))
-				fmt.Fprintf(&b, "%s %s%s\n", num, name, count)
-			}
-			if len(o.Queue) > 5 {
-				b.WriteString(dim.Render(fmt.Sprintf("  +%d more\n", len(o.Queue)-5)))
-			}
-		} else if o.NowTitle == "" {
-			b.WriteString(dim.Italic(true).Render("(empty)"))
-			b.WriteString("\n")
-		}
+		note := lipgloss.NewStyle().Foreground(ColorMusic).Render("♪")
+		title := truncateWidth(o.NowTitle, o.Width-6)
+		nowStyle := lipgloss.NewStyle().Foreground(ColorHighlight).Render(title)
+		fmt.Fprintf(&b, "%s %s\n", note, nowStyle)
 	}
 
 	return RightSidebarStyle.

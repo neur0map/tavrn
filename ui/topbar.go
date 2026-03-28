@@ -21,7 +21,6 @@ type TopBar struct {
 	// Jukebox
 	NowTitle    string
 	NowArtist   string
-	NowSource   string
 	NowDuration time.Duration
 	NowPosition time.Duration
 	HasTrack    bool

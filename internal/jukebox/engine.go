@@ -2,60 +2,38 @@ package jukebox
 
 import (
 	"context"
-	"math/rand/v2"
-	"sort"
 	"sync"
 	"time"
 )
 
-type Phase int
-
-const (
-	PhaseIdle Phase = iota
-	PhasePlaying
-)
-
-type Request struct {
-	Track     Track
-	Count     int // how many users requested this
-	Votes     int // how many votes for next
-	Voters    map[string]bool
-	FirstTime time.Time
-}
-
+// EngineState is a snapshot of the engine's current state for the UI.
 type EngineState struct {
-	Phase     Phase
-	Current   *Track
-	Position  time.Duration
-	Requests  []Request // sorted by votes desc, then count desc
-	Listeners int
+	Current       *Track
+	Position      time.Duration
+	Listeners     int
+	SkipVotes     int
+	SkipThreshold int
 }
-
-type OnStateChange func()
 
 type Engine struct {
 	mu            sync.RWMutex
-	phase         Phase
+	lofi          *Lofi
 	current       *Track
 	playStart     time.Time
-	requestPool   map[string]*Request // keyed by Track.ID
-	userVoted     map[string]string   // fingerprint -> trackID they voted for
-	backends      []MusicBackend
-	onStateChange OnStateChange
+	skipVoters    map[string]bool
+	onlineCount   func() int
+	onStateChange func()
 	onTrackChange func(Track)
-	listeners     int
 }
 
-func NewEngine(backends []MusicBackend) *Engine {
+func NewEngine(lofi *Lofi) *Engine {
 	return &Engine{
-		phase:       PhaseIdle,
-		requestPool: make(map[string]*Request),
-		userVoted:   make(map[string]string),
-		backends:    backends,
+		lofi:       lofi,
+		skipVoters: make(map[string]bool),
 	}
 }
 
-func (e *Engine) SetOnStateChange(fn OnStateChange) {
+func (e *Engine) SetOnStateChange(fn func()) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.onStateChange = fn
@@ -67,13 +45,34 @@ func (e *Engine) SetOnTrackChange(fn func(Track)) {
 	e.onTrackChange = fn
 }
 
-func (e *Engine) SetListeners(n int) {
+func (e *Engine) SetOnlineCount(fn func() int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.listeners = n
+	e.onlineCount = fn
 }
 
-// UpdateDuration updates the current track's duration (e.g., from actual audio size).
+func (e *Engine) State() EngineState {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	online := 0
+	if e.onlineCount != nil {
+		online = e.onlineCount()
+	}
+
+	state := EngineState{
+		Current:       e.current,
+		Listeners:     online,
+		SkipVotes:     len(e.skipVoters),
+		SkipThreshold: skipThreshold(online),
+	}
+	if e.current != nil {
+		state.Position = time.Since(e.playStart)
+	}
+	return state
+}
+
+// UpdateDuration sets the current track's actual duration from ffprobe.
 func (e *Engine) UpdateDuration(seconds int) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -83,162 +82,36 @@ func (e *Engine) UpdateDuration(seconds int) {
 	}
 }
 
-func (e *Engine) Backends() []MusicBackend {
-	var enabled []MusicBackend
-	for _, b := range e.backends {
-		if b.Enabled() {
-			enabled = append(enabled, b)
-		}
-	}
-	return enabled
-}
-
-func (e *Engine) State() EngineState {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	state := EngineState{
-		Phase:     e.phase,
-		Current:   e.current,
-		Listeners: e.listeners,
-	}
-
-	if e.current != nil {
-		state.Position = time.Since(e.playStart)
-	}
-
-	// Build sorted requests: votes desc, then count desc, then earliest first
-	reqs := make([]Request, 0, len(e.requestPool))
-	for _, r := range e.requestPool {
-		reqs = append(reqs, Request{
-			Track:     r.Track,
-			Count:     r.Count,
-			Votes:     r.Votes,
-			FirstTime: r.FirstTime,
-		})
-	}
-	sort.Slice(reqs, func(i, j int) bool {
-		if reqs[i].Votes != reqs[j].Votes {
-			return reqs[i].Votes > reqs[j].Votes
-		}
-		if reqs[i].Count != reqs[j].Count {
-			return reqs[i].Count > reqs[j].Count
-		}
-		return reqs[i].FirstTime.Before(reqs[j].FirstTime)
-	})
-	state.Requests = reqs
-
-	return state
-}
-
-// UserVotedFor returns the track ID the user voted for, or empty string.
-func (e *Engine) UserVotedFor(userFP string) string {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.userVoted[userFP]
-}
-
-// AddRequest adds a track to the request pool.
-// If the jukebox is idle, the track starts playing immediately.
-func (e *Engine) AddRequest(userFP string, track Track) {
+// VoteSkip registers a skip vote. Returns true if the skip was triggered.
+func (e *Engine) VoteSkip(fingerprint string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.phase == PhaseIdle {
-		// Nothing playing — start this track immediately
-		e.current = &track
-		e.playStart = time.Now()
-		e.phase = PhasePlaying
-		e.notifyChange()
-		e.notifyTrackChange(track)
-		return
-	}
-
-	if existing, ok := e.requestPool[track.ID]; ok {
-		existing.Count++
-	} else {
-		e.requestPool[track.ID] = &Request{
-			Track:     track,
-			Count:     1,
-			Voters:    make(map[string]bool),
-			FirstTime: time.Now(),
-		}
-	}
-
-	e.notifyChange()
-}
-
-// Vote casts a vote for a track. Users vote by fingerprint (pub key).
-// Returns true if the vote was accepted.
-func (e *Engine) Vote(userFP string, trackID string) bool {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	if e.phase == PhaseIdle {
+	if e.current == nil {
 		return false
 	}
 
-	// Check track exists in request pool
-	req, ok := e.requestPool[trackID]
-	if !ok {
-		return false
+	e.skipVoters[fingerprint] = true
+
+	online := 0
+	if e.onlineCount != nil {
+		online = e.onlineCount()
 	}
 
-	// If user already voted for something, remove that vote first
-	if oldTrackID, voted := e.userVoted[userFP]; voted {
-		if oldTrackID == trackID {
-			return false // already voted for this track
-		}
-		// Switch vote: remove from old track
-		if oldReq, ok := e.requestPool[oldTrackID]; ok {
-			delete(oldReq.Voters, userFP)
-			oldReq.Votes = len(oldReq.Voters)
-		}
+	if len(e.skipVoters) >= skipThreshold(online) {
+		e.autoNext()
+		return true
 	}
-
-	// Cast vote
-	req.Voters[userFP] = true
-	req.Votes = len(req.Voters)
-	e.userVoted[userFP] = trackID
 
 	e.notifyChange()
-	return true
+	return false
 }
 
-func (e *Engine) StartPlaying(track Track) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.current = &track
-	e.playStart = time.Now()
-	e.phase = PhasePlaying
-
-	e.notifyChange()
-	e.notifyTrackChange(track)
-}
-
-func (e *Engine) FinishTrack() *Track {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	winner := e.pickWinnerLocked()
-
-	// Reset for next round
-	e.requestPool = make(map[string]*Request)
-	e.userVoted = make(map[string]string)
-
-	if winner != nil {
-		e.current = winner
-		e.playStart = time.Now()
-		e.phase = PhasePlaying
-		e.notifyTrackChange(*winner)
-	} else {
-		e.phase = PhaseIdle
-		e.current = nil
-	}
-
-	e.notifyChange()
-	return winner
+// UserSkipped returns true if the user already voted to skip.
+func (e *Engine) UserSkipped(fingerprint string) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.skipVoters[fingerprint]
 }
 
 func (e *Engine) Run(ctx context.Context) {
@@ -259,99 +132,46 @@ func (e *Engine) tick() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.current == nil || e.phase == PhaseIdle {
-		e.tryAutoPlay()
+	// No track playing — pick one
+	if e.current == nil {
+		e.autoNext()
 		return
 	}
 
-	elapsed := time.Since(e.playStart)
+	// Duration not yet known (waiting for ffprobe) — skip progress check
 	duration := time.Duration(e.current.Duration) * time.Second
 	if duration == 0 {
 		return
 	}
 
-	progress := elapsed.Seconds() / duration.Seconds()
-
-	if progress >= 1.0 {
-		// Track ended — pick winner
-		winner := e.pickWinnerLocked()
-		e.requestPool = make(map[string]*Request)
-		e.userVoted = make(map[string]string)
-
-		if winner != nil {
-			e.current = winner
-			e.playStart = time.Now()
-			e.phase = PhasePlaying
-			e.notifyTrackChange(*winner)
-		} else {
-			e.current = nil
-			e.phase = PhaseIdle
-			e.tryAutoPlay()
-		}
-		e.notifyChange()
-	}
-}
-
-func (e *Engine) tryAutoPlay() {
-	for _, b := range e.backends {
-		if !b.Enabled() {
-			continue
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		tracks, err := b.Search(ctx, "popular", 20)
-		cancel()
-		if err != nil || len(tracks) == 0 {
-			continue
-		}
-		pick := tracks[rand.IntN(len(tracks))]
-		e.current = &pick
-		e.playStart = time.Now()
-		e.phase = PhasePlaying
-		e.notifyChange()
-		e.notifyTrackChange(pick)
+	// Check if track ended
+	elapsed := time.Since(e.playStart)
+	if elapsed >= duration {
+		e.autoNext()
 		return
 	}
+
+	// Check if threshold dropped (people disconnected) and skip should trigger
+	online := 0
+	if e.onlineCount != nil {
+		online = e.onlineCount()
+	}
+	if len(e.skipVoters) > 0 && len(e.skipVoters) >= skipThreshold(online) {
+		e.autoNext()
+	}
 }
 
-// pickWinnerLocked returns the track with the most votes.
-// Ties broken by request count, then random.
-func (e *Engine) pickWinnerLocked() *Track {
-	if len(e.requestPool) == 0 {
-		return nil
+func (e *Engine) autoNext() {
+	tracks := e.lofi.randomTracks(1)
+	if len(tracks) == 0 {
+		return
 	}
-
-	type candidate struct {
-		track Track
-		votes int
-		count int
-	}
-	var candidates []candidate
-	for _, r := range e.requestPool {
-		candidates = append(candidates, candidate{
-			track: r.Track,
-			votes: r.Votes,
-			count: r.Count,
-		})
-	}
-
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].votes != candidates[j].votes {
-			return candidates[i].votes > candidates[j].votes
-		}
-		return candidates[i].count > candidates[j].count
-	})
-
-	maxVotes := candidates[0].votes
-	maxCount := candidates[0].count
-	var tied []candidate
-	for _, c := range candidates {
-		if c.votes == maxVotes && c.count == maxCount {
-			tied = append(tied, c)
-		}
-	}
-
-	winner := tied[rand.IntN(len(tied))]
-	return &winner.track
+	pick := tracks[0]
+	e.current = &pick
+	e.playStart = time.Now()
+	e.skipVoters = make(map[string]bool)
+	e.notifyChange()
+	e.notifyTrackChange(pick)
 }
 
 func (e *Engine) notifyChange() {
@@ -364,4 +184,12 @@ func (e *Engine) notifyTrackChange(track Track) {
 	if e.onTrackChange != nil {
 		go e.onTrackChange(track)
 	}
+}
+
+// skipThreshold returns how many votes are needed to skip.
+func skipThreshold(online int) int {
+	if online <= 5 {
+		return 1
+	}
+	return 3 + (online-6)/10
 }

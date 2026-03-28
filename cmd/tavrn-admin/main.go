@@ -126,39 +126,15 @@ func runServer() {
 		os.MkdirAll(".ssh", 0700)
 	}
 
-	var backends []jukebox.MusicBackend
 	lofi := jukebox.NewLofi()
-	backends = append(backends, lofi)
-	log.Printf("Lofi backend enabled (%d tracks)", lofi.TrackCount())
-	var ytBackend *jukebox.YouTube
-	if _, err := exec.LookPath("yt-dlp"); err == nil {
-		ytProxy := os.Getenv("YT_PROXY")
-		ytBackend = jukebox.NewYouTube(ytProxy)
-		backends = append(backends, ytBackend)
-		if ytProxy != "" {
-			log.Printf("YouTube backend enabled (proxy: %s)", ytProxy)
-		} else {
-			log.Printf("YouTube backend enabled (direct)")
-		}
-	}
-	jukeboxEngine := jukebox.NewEngine(backends)
+	log.Printf("Lofi radio: %d tracks loaded", lofi.TrackCount())
+	jukeboxEngine := jukebox.NewEngine(lofi)
+	jukeboxEngine.SetOnlineCount(h.OnlineCount)
 	streamer := jukebox.NewStreamer()
 	streamer.SetOnDurationKnown(func(seconds int) {
 		jukeboxEngine.UpdateDuration(seconds)
 	})
 	jukeboxEngine.SetOnTrackChange(func(track jukebox.Track) {
-		if track.Source == "youtube" && ytBackend != nil {
-			// Download and convert to MP3 via yt-dlp
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-			defer cancel()
-			audio, err := ytBackend.DownloadMP3(ctx, track.ID)
-			if err != nil {
-				log.Printf("youtube: failed to download %s: %v", track.Title, err)
-				return
-			}
-			streamer.StreamTrackWithAudio(track, audio)
-			return
-		}
 		streamer.StreamTrack(track)
 	})
 

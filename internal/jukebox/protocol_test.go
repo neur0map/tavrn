@@ -12,7 +12,6 @@ func TestProtocolEncodeDecodeHeader(t *testing.T) {
 		Title:    "Test Song",
 		Artist:   "Test Artist",
 		Duration: 180,
-		Source:   "jamendo",
 	}
 	var buf bytes.Buffer
 	if err := EncodeTrackHeader(&buf, track); err != nil {
@@ -40,7 +39,6 @@ func TestProtocolFullFrame(t *testing.T) {
 		Title:    "Another Song",
 		Artist:   "Another Artist",
 		Duration: 240,
-		Source:   "radio",
 	}
 
 	audioData := []byte("fake mp3 data that could contain any bytes including 0x00")
