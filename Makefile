@@ -1,49 +1,28 @@
-.PHONY: build server client dev lint fmt vet test test-race ci clean
+.PHONY: run connect test check clean
 
-# ── Build ──────────────────────────────────────────
-build: server client
-
-server:
+# Start server locally (builds first)
+run:
 	go build -o bin/tavrn-admin ./cmd/tavrn-admin
-
-client:
-	go build -o bin/tavrn ./cmd/tavrn
-
-# ── Dev ────────────────────────────────────────────
-# Terminal 1: make run
-# Terminal 2: make connect (or: ssh localhost -p 2222)
-run: server
 	./bin/tavrn-admin
 
-connect: client
+# Connect to local server with audio (builds first)
+connect:
+	go build -o bin/tavrn ./cmd/tavrn
 	./bin/tavrn --dev
 
-dev: server
-	@echo "Starting server on :2222 — connect with: make connect"
-	./bin/tavrn-admin
-
-# ── Lint (mirrors CI) ─────────────────────────────
-fmt:
-	gofmt -w .
-
-lint: fmt
-	@unformatted=$$(gofmt -l .); \
-	if [ -n "$$unformatted" ]; then \
-		echo "Files not formatted:"; echo "$$unformatted"; exit 1; \
-	fi
-	go vet ./...
-
-# ── Test ───────────────────────────────────────────
+# Run all tests with race detector
 test:
-	go test ./internal/... ./ui/...
-
-test-race:
 	go test -race ./internal/... ./ui/...
 
-# ── CI (run before push) ──────────────────────────
-ci: lint build test-race
-	@echo "All checks passed."
+# Run before push — lint + build + test (mirrors CI)
+check:
+	gofmt -w .
+	go vet ./...
+	go build -o bin/tavrn-admin ./cmd/tavrn-admin
+	go build -o bin/tavrn ./cmd/tavrn
+	go test -race ./internal/... ./ui/...
+	@echo "All good."
 
-# ── Clean ──────────────────────────────────────────
+# Remove binaries and db
 clean:
 	rm -rf bin/ tavrn.db
