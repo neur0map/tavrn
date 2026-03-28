@@ -1,5 +1,19 @@
 # Roadmap
 
+## Tavern AI — The Bartender
+
+A local AI that lives in the tavern and learns from the regulars.
+
+- Runs a local model on the server — no cloud, no filters, no censorship
+- Users tag it in chat with `@barkeep` to ask questions or just talk
+- Learns tone, slang, and humor from daily conversations over time
+- Personality evolves based on who hangs out — the tavern shapes the AI
+- Fine-tunes on chat history: starts generic, becomes a local character
+- Inspired by Grok's unfiltered approach but trained by the tavern's own crowd
+- Could serve as trivia host, storyteller, argument settler, or just another regular
+
+---
+
 ## Theater Room — Watch YouTube Together
 
 A shared room where users paste YouTube links, vote on what plays next, and watch together.
