@@ -54,7 +54,7 @@ func TestStreamerAddRemoveConn(t *testing.T) {
 }
 
 func TestStreamerBroadcastsToConns(t *testing.T) {
-	mp3Data := bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 100)
+	mp3Data := bytes.Repeat([]byte{0xFF, 0xFB, 0x90, 0x00}, 500)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/mpeg")
 		w.Write(mp3Data)

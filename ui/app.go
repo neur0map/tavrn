@@ -153,12 +153,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, doTick(a.nextTickInterval())
 
-	case JukeboxSkipMsg:
-		if a.jukeboxEngine != nil {
-			a.jukeboxEngine.VoteSkip(a.session.Fingerprint)
-		}
-		return a, nil
-
 	case HubMsg:
 		inner := session.Msg(msg)
 		if inner.Type == session.MsgJukeboxUpdate {

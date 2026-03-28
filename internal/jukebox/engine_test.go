@@ -24,120 +24,38 @@ func TestEngineAutoPicksOnFirstTick(t *testing.T) {
 
 func TestEngineAutoNextOnTrackEnd(t *testing.T) {
 	e := NewEngine(NewLofi())
-	e.tick() // picks first track
+	e.tick()
 
-	// Simulate track ending
 	e.mu.Lock()
 	e.current.Duration = 1
 	e.playStart = time.Now().Add(-2 * time.Second)
-	firstID := e.current.ID
 	e.mu.Unlock()
 
-	e.tick() // should pick next track
+	e.tick()
 
 	state := e.State()
 	if state.Current == nil {
 		t.Fatal("expected a track after auto-next")
 	}
-	// It's random, so it might pick the same track, but at least it shouldn't be nil
-	_ = firstID
 }
 
-func TestEngineVoteSkipInstant(t *testing.T) {
+func TestEngineWaitsForDuration(t *testing.T) {
 	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 3 }) // <= 5, threshold = 1
-	e.tick()
-
-	// Move playStart back to bypass debounce
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-3 * time.Second)
-	e.mu.Unlock()
-
-	skipped := e.VoteSkip("user1")
-	if !skipped {
-		t.Error("expected instant skip with <= 5 online")
-	}
-}
-
-func TestEngineVoteSkipThreshold(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 10 }) // threshold = 3 + (10-6)/10 = 3
-	e.tick()
-
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-3 * time.Second)
-	e.mu.Unlock()
-
-	if e.VoteSkip("user1") {
-		t.Error("should not skip with 1/3 votes")
-	}
-	if e.VoteSkip("user2") {
-		t.Error("should not skip with 2/3 votes")
-	}
-	if !e.VoteSkip("user3") {
-		t.Error("should skip with 3/3 votes")
-	}
-}
-
-func TestEngineVoteSkipDeduplicate(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 10 })
-	e.tick()
-
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-3 * time.Second)
-	e.mu.Unlock()
-
-	e.VoteSkip("user1")
-	e.VoteSkip("user1") // duplicate
-	e.VoteSkip("user1") // duplicate
+	e.tick() // picks first track, duration = 0
 
 	state := e.State()
-	if state.SkipVotes != 1 {
-		t.Errorf("expected 1 vote after dedup, got %d", state.SkipVotes)
+	if state.Current == nil {
+		t.Fatal("expected a track")
 	}
-}
+	if state.Current.Duration != 0 {
+		t.Errorf("expected duration 0, got %d", state.Current.Duration)
+	}
 
-func TestEngineVoteSkipDebounce(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 3 })
+	// Tick again — should NOT pick a new track (waiting for ffprobe)
+	firstID := state.Current.ID
 	e.tick()
-
-	// Skip should be rejected within 2 seconds of track start
-	skipped := e.VoteSkip("user1")
-	if skipped {
-		t.Error("expected skip to be debounced within 2 seconds")
-	}
-}
-
-func TestEngineSkipResetsOnNewTrack(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 3 })
-	e.tick()
-
-	e.VoteSkip("user1") // instant skip, resets voters
-
-	state := e.State()
-	if state.SkipVotes != 0 {
-		t.Errorf("expected 0 skip votes after track change, got %d", state.SkipVotes)
-	}
-}
-
-func TestEngineUserSkipped(t *testing.T) {
-	e := NewEngine(NewLofi())
-	e.SetOnlineCount(func() int { return 20 })
-	e.tick()
-
-	e.mu.Lock()
-	e.playStart = time.Now().Add(-3 * time.Second)
-	e.mu.Unlock()
-
-	if e.UserSkipped("user1") {
-		t.Error("user1 should not have voted yet")
-	}
-	e.VoteSkip("user1")
-	if !e.UserSkipped("user1") {
-		t.Error("user1 should have voted")
+	if e.State().Current.ID != firstID {
+		t.Error("should not change track while duration is unknown")
 	}
 }
 
@@ -151,21 +69,23 @@ func TestEngineUpdateDuration(t *testing.T) {
 	}
 }
 
-func TestSkipThreshold(t *testing.T) {
-	tests := []struct {
-		online    int
-		threshold int
-	}{
-		{1, 1}, {3, 1}, {5, 1},
-		{6, 3}, {10, 3}, {15, 3},
-		{16, 4}, {25, 4},
-		{26, 5}, {35, 5},
-		{36, 6},
+func TestEngineListeners(t *testing.T) {
+	e := NewEngine(NewLofi())
+	e.SetOnlineCount(func() int { return 7 })
+	state := e.State()
+	if state.Listeners != 7 {
+		t.Errorf("listeners = %d, want 7", state.Listeners)
 	}
-	for _, tt := range tests {
-		got := skipThreshold(tt.online)
-		if got != tt.threshold {
-			t.Errorf("skipThreshold(%d) = %d, want %d", tt.online, got, tt.threshold)
-		}
+}
+
+func TestEngineTrackChangeCallback(t *testing.T) {
+	e := NewEngine(NewLofi())
+	called := false
+	e.SetOnTrackChange(func(track Track) {
+		called = true
+	})
+	e.tick()
+	if !called {
+		t.Error("expected onTrackChange to be called on first tick")
 	}
 }

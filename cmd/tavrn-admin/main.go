@@ -134,10 +134,11 @@ func runServer() {
 	streamer.SetOnDurationKnown(func(seconds int) {
 		jukeboxEngine.UpdateDuration(seconds)
 	})
+	streamer.SetOnError(func() {
+		// Download failed — reset engine so next tick picks a new track
+		jukeboxEngine.UpdateDuration(1) // set tiny duration so tick triggers auto-next
+	})
 	jukeboxEngine.SetOnTrackChange(func(track jukebox.Track) {
-		// Close all audio connections to interrupt current playback.
-		// Clients reconnect automatically and get the new track.
-		streamer.CloseAllConns()
 		streamer.StreamTrack(track)
 	})
 

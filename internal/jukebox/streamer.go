@@ -26,6 +26,7 @@ type Streamer struct {
 	playStart       time.Time // when the current track started playing
 	client          *http.Client
 	onDurationKnown func(int) // callback to update engine with actual duration
+	onError         func()    // callback when download fails (engine retries)
 }
 
 // NewStreamer creates a new audio streamer.
@@ -36,12 +37,18 @@ func NewStreamer() *Streamer {
 	}
 }
 
-// SetOnDurationKnown sets a callback invoked when actual track duration
-// is estimated from downloaded audio size (MP3 at ~128kbps).
+// SetOnDurationKnown sets a callback invoked when actual track duration is known.
 func (s *Streamer) SetOnDurationKnown(fn func(int)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onDurationKnown = fn
+}
+
+// SetOnError sets a callback invoked when a download fails.
+func (s *Streamer) SetOnError(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onError = fn
 }
 
 // AddConn registers a new audio channel connection.
@@ -90,17 +97,6 @@ func (s *Streamer) ConnCount() int {
 	return len(s.conns)
 }
 
-// CloseAllConns closes all audio connections, forcing clients to reconnect.
-// Used on skip to interrupt current playback.
-func (s *Streamer) CloseAllConns() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for conn := range s.conns {
-		conn.Close()
-		delete(s.conns, conn)
-	}
-}
-
 // StreamTrack downloads the track and sends it to all connected clients.
 func (s *Streamer) StreamTrack(track Track) {
 	s.mu.Lock()
@@ -130,15 +126,16 @@ func (s *Streamer) Stop() {
 
 func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 	if track.URL == "" {
+		s.signalError()
 		return
 	}
 
 	log.Printf("streamer: downloading %s", track.Title)
 
-	// Download the full MP3
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, track.URL, nil)
 	if err != nil {
 		log.Printf("streamer: request error: %v", err)
+		s.signalError()
 		return
 	}
 
@@ -148,9 +145,16 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 			return
 		}
 		log.Printf("streamer: fetch error: %v", err)
+		s.signalError()
 		return
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("streamer: HTTP %d for %s", resp.StatusCode, track.Title)
+		s.signalError()
+		return
+	}
 
 	audio, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -158,6 +162,13 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 			return
 		}
 		log.Printf("streamer: read error: %v", err)
+		s.signalError()
+		return
+	}
+
+	if len(audio) < 1000 {
+		log.Printf("streamer: audio too small (%d bytes), skipping %s", len(audio), track.Title)
+		s.signalError()
 		return
 	}
 
@@ -196,6 +207,15 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 			conn.Close()
 		}
 		s.mu.Unlock()
+	}
+}
+
+func (s *Streamer) signalError() {
+	s.mu.RLock()
+	fn := s.onError
+	s.mu.RUnlock()
+	if fn != nil {
+		fn()
 	}
 }
 

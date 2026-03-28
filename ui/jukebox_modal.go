@@ -10,25 +10,18 @@ import (
 	"tavrn.sh/internal/jukebox"
 )
 
-// JukeboxSkipMsg signals a skip vote from the user.
-type JukeboxSkipMsg struct{}
-
 type JukeboxModal struct {
 	engine *jukebox.Engine
-	userFP string
 }
 
 func NewJukeboxModal(engine *jukebox.Engine, userFP string) JukeboxModal {
-	return JukeboxModal{engine: engine, userFP: userFP}
+	return JukeboxModal{engine: engine}
 }
 
 func (m JukeboxModal) Update(msg tea.Msg) (JukeboxModal, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		switch keyMsg.String() {
-		case "esc":
+		if keyMsg.String() == "esc" {
 			return m, func() tea.Msg { return CloseModalMsg{} }
-		case "s", "S":
-			return m, func() tea.Msg { return JukeboxSkipMsg{} }
 		}
 	}
 	return m, nil
@@ -37,7 +30,6 @@ func (m JukeboxModal) Update(msg tea.Msg) (JukeboxModal, tea.Cmd) {
 func (m JukeboxModal) View(width, height int) string {
 	modalW := 44
 
-	// Header
 	headerText := " ♪ Lofi Radio "
 	fillLen := modalW - lipgloss.Width(headerText)
 	if fillLen < 4 {
@@ -61,7 +53,6 @@ func (m JukeboxModal) View(width, height int) string {
 			"  Loading..."))
 		b.WriteString("\n")
 	} else {
-		// Title + artist
 		title := truncateWidth(state.Current.Title, modalW-4)
 		b.WriteString("  " + lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(title))
 		b.WriteString("\n")
@@ -69,7 +60,6 @@ func (m JukeboxModal) View(width, height int) string {
 		b.WriteString("  " + lipgloss.NewStyle().Foreground(ColorSand).Render(artist))
 		b.WriteString("\n\n")
 
-		// Progress bar (only when duration is known)
 		if state.Current.Duration > 0 {
 			barWidth := modalW - 14
 			if barWidth < 10 {
@@ -92,60 +82,25 @@ func (m JukeboxModal) View(width, height int) string {
 			b.WriteString("  " + lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render("buffering...") + "\n\n")
 		}
 
-		// Status line
 		dot := lipgloss.NewStyle().Foreground(ColorGreen).Render("●")
 		listeners := lipgloss.NewStyle().Foreground(ColorDim).Render(
 			fmt.Sprintf("%d listening", state.Listeners))
 		b.WriteString("  " + dot + " playing · " + listeners + "\n")
 	}
 
-	// Footer
 	b.WriteString("\n")
 	footerFill := lipgloss.NewStyle().Foreground(ColorBorder).Render(
 		strings.Repeat("╱", modalW))
 	b.WriteString(footerFill)
 	b.WriteString("\n")
 
-	// Skip + ESC
-	sKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("S")
 	escKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ESC")
-
-	skipLabel := m.skipLabel(state)
 	b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
-		fmt.Sprintf("  %s %s   %s close", sKey, skipLabel, escKey)))
+		fmt.Sprintf("  %s close", escKey)))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorBorder).
 		Padding(1, 2).
 		Render(b.String())
-}
-
-func (m JukeboxModal) skipLabel(state jukebox.EngineState) string {
-	voted := m.engine.UserSkipped(m.userFP)
-
-	if state.SkipThreshold <= 1 {
-		if voted {
-			return lipgloss.NewStyle().Foreground(ColorGreen).Render("skip ✓ skipping...")
-		}
-		return "skip"
-	}
-
-	remaining := state.SkipThreshold - state.SkipVotes
-	if remaining <= 0 {
-		return lipgloss.NewStyle().Foreground(ColorGreen).Render("skip ✓ skipping...")
-	}
-
-	if voted {
-		check := lipgloss.NewStyle().Foreground(ColorGreen).Render("✓")
-		if remaining == 1 {
-			return fmt.Sprintf("skip %s (1 more vote)", check)
-		}
-		return fmt.Sprintf("skip %s (%d more votes)", check, remaining)
-	}
-
-	if remaining == 1 {
-		return "skip (1 more vote)"
-	}
-	return fmt.Sprintf("skip (%d more votes)", remaining)
 }

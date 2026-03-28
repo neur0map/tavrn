@@ -210,24 +210,7 @@ func killMPV() {
 }
 
 // startAudioChannel opens the "tavrn-audio" SSH channel and plays audio via mpv.
-// Reconnects automatically if the channel closes (e.g., on track skip).
 func startAudioChannel(ctx context.Context, conn *ssh.Client) {
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-		playAudioChannel(ctx, conn)
-		killMPV()
-		// Brief pause before reconnect
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(500 * time.Millisecond):
-		}
-	}
-}
-
-func playAudioChannel(ctx context.Context, conn *ssh.Client) {
 	ch, reqs, err := conn.OpenChannel("tavrn-audio", nil)
 	if err != nil {
 		return
