@@ -11,18 +11,38 @@ import (
 )
 
 type JukeboxModal struct {
-	engine *jukebox.Engine
+	engine      *jukebox.Engine
+	selectedTab int // cursor position in genre tab bar
 }
 
 func NewJukeboxModal(engine *jukebox.Engine, userFP string) JukeboxModal {
-	return JukeboxModal{engine: engine}
+	// Initialize cursor to the currently active genre
+	active := int(engine.State().ActiveGenre)
+	return JukeboxModal{
+		engine:      engine,
+		selectedTab: active,
+	}
 }
 
 func (m JukeboxModal) Update(msg tea.Msg) (JukeboxModal, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		if keyMsg.String() == "esc" {
-			return m, func() tea.Msg { return CloseModalMsg{} }
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
+
+	genres := jukebox.AllGenres()
+
+	switch keyMsg.String() {
+	case "left", "h":
+		if m.selectedTab > 0 {
+			m.selectedTab--
 		}
+		m.engine.SetGenre(genres[m.selectedTab])
+	case "right", "l":
+		if m.selectedTab < len(genres)-1 {
+			m.selectedTab++
+		}
+		m.engine.SetGenre(genres[m.selectedTab])
 	}
 	return m, nil
 }
@@ -30,7 +50,8 @@ func (m JukeboxModal) Update(msg tea.Msg) (JukeboxModal, tea.Cmd) {
 func (m JukeboxModal) View(width, height int) string {
 	modalW := 44
 
-	headerText := " ♪ Lofi Radio "
+	// Header
+	headerText := " ♪ Tavern Radio "
 	fillLen := modalW - lipgloss.Width(headerText)
 	if fillLen < 4 {
 		fillLen = 4
@@ -46,8 +67,42 @@ func (m JukeboxModal) View(width, height int) string {
 	b.WriteString(headerFill + headerTitle + headerFillR)
 	b.WriteString("\n\n")
 
+	// Genre tab bar
 	state := m.engine.State()
+	genres := jukebox.AllGenres()
+	var tabs []string
+	for i, g := range genres {
+		label := g.String()
+		switch {
+		case i == m.selectedTab:
+			// Selected tab: bracketed and highlighted
+			tabs = append(tabs, lipgloss.NewStyle().
+				Foreground(ColorMusic).Bold(true).
+				Render("["+label+"]"))
+		case g == state.ActiveGenre:
+			// Active but not selected: bright
+			tabs = append(tabs, lipgloss.NewStyle().
+				Foreground(ColorHighlight).
+				Render(label))
+		default:
+			tabs = append(tabs, lipgloss.NewStyle().
+				Foreground(ColorDim).
+				Render(label))
+		}
+	}
+	b.WriteString("  " + strings.Join(tabs, "  "))
+	b.WriteString("\n")
 
+	// "Switching after this track" indicator
+	if state.PendingGenre != state.ActiveGenre {
+		nextLabel := state.PendingGenre.String()
+		b.WriteString("  " + lipgloss.NewStyle().Foreground(ColorDim).Italic(true).
+			Render("↳ switching to "+nextLabel+" next"))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	// Now playing
 	if state.Current == nil {
 		b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Italic(true).Render(
 			"  Loading..."))
@@ -94,9 +149,11 @@ func (m JukeboxModal) View(width, height int) string {
 	b.WriteString(footerFill)
 	b.WriteString("\n")
 
+	// Hotkey help
+	lrKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("←→")
 	escKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ESC")
 	b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
-		fmt.Sprintf("  %s close", escKey)))
+		fmt.Sprintf("  %s genre  %s close", lrKey, escKey)))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
