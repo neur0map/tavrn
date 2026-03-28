@@ -37,12 +37,14 @@ func (m JukeboxModal) Update(msg tea.Msg) (JukeboxModal, tea.Cmd) {
 		if m.selectedTab > 0 {
 			m.selectedTab--
 		}
-		m.engine.SetGenre(genres[m.selectedTab])
 	case "right", "l":
 		if m.selectedTab < len(genres)-1 {
 			m.selectedTab++
 		}
-		m.engine.SetGenre(genres[m.selectedTab])
+	case "enter":
+		if m.selectedTab >= 0 && m.selectedTab < len(genres) {
+			m.engine.SetGenre(genres[m.selectedTab])
+		}
 	}
 	return m, nil
 }
@@ -151,9 +153,10 @@ func (m JukeboxModal) View(width, height int) string {
 
 	// Hotkey help
 	lrKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("←→")
+	enterKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")
 	escKey := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ESC")
 	b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
-		fmt.Sprintf("  %s genre  %s close", lrKey, escKey)))
+		fmt.Sprintf("  %s browse  %s select  %s close", lrKey, enterKey, escKey)))
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

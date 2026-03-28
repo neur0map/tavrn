@@ -51,9 +51,12 @@ func (e *Engine) SetOnlineCount(fn func() int) {
 
 func (e *Engine) SetGenre(g Genre) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.pendingGenre = g
-	e.notifyChange()
+	fn := e.onStateChange
+	e.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 func (e *Engine) State() EngineState {
