@@ -14,13 +14,14 @@ import (
 //
 // Wire format per track: [4-byte header len][JSON header][4-byte audio len][MP3 bytes]
 type Streamer struct {
-	mu           sync.RWMutex
-	conns        map[io.WriteCloser]bool
-	cancel       context.CancelFunc
-	currentTrack *Track
-	audioData    []byte    // complete MP3 for current track
-	playStart    time.Time // when the current track started playing
-	client       *http.Client
+	mu              sync.RWMutex
+	conns           map[io.WriteCloser]bool
+	cancel          context.CancelFunc
+	currentTrack    *Track
+	audioData       []byte    // complete MP3 for current track
+	playStart       time.Time // when the current track started playing
+	client          *http.Client
+	onDurationKnown func(int) // callback to update engine with actual duration
 }
 
 // NewStreamer creates a new audio streamer.
@@ -29,6 +30,14 @@ func NewStreamer() *Streamer {
 		conns:  make(map[io.WriteCloser]bool),
 		client: &http.Client{},
 	}
+}
+
+// SetOnDurationKnown sets a callback invoked when actual track duration
+// is estimated from downloaded audio size (MP3 at ~128kbps).
+func (s *Streamer) SetOnDurationKnown(fn func(int)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onDurationKnown = fn
 }
 
 // AddConn registers a new audio channel connection.
@@ -92,6 +101,21 @@ func (s *Streamer) StreamTrack(track Track) {
 	go s.downloadAndBroadcast(ctx, track)
 }
 
+// StreamTrackWithAudio broadcasts pre-downloaded audio data for a track.
+// Used for YouTube tracks where audio is downloaded via yt-dlp.
+func (s *Streamer) StreamTrackWithAudio(track Track, audio []byte) {
+	s.mu.Lock()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	s.cancel = nil
+	s.currentTrack = &track
+	s.audioData = nil
+	s.mu.Unlock()
+
+	go s.broadcastAudio(track, audio)
+}
+
 // Stop cancels the current download.
 func (s *Streamer) Stop() {
 	s.mu.Lock()
@@ -137,10 +161,20 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 		return
 	}
 
-	log.Printf("streamer: downloaded %d bytes, broadcasting to %d conns", len(audio), s.ConnCount())
+	// Estimate actual duration from file size (MP3 ~128kbps = 16000 bytes/sec)
+	estimatedDuration := len(audio) / 16000
+	if estimatedDuration < 10 {
+		estimatedDuration = 10
+	}
+	log.Printf("streamer: downloaded %d bytes (~%ds), broadcasting to %d conns",
+		len(audio), estimatedDuration, s.ConnCount())
+
+	s.mu.Lock()
+	if s.onDurationKnown != nil {
+		go s.onDurationKnown(estimatedDuration)
+	}
 
 	// Store the audio data and mark playback start time
-	s.mu.Lock()
 	s.audioData = audio
 	s.playStart = time.Now()
 	// Snapshot current conns
@@ -159,6 +193,44 @@ func (s *Streamer) downloadAndBroadcast(ctx context.Context, track Track) {
 	}
 
 	// Remove failed connections
+	if len(failed) > 0 {
+		s.mu.Lock()
+		for _, conn := range failed {
+			delete(s.conns, conn)
+			conn.Close()
+		}
+		s.mu.Unlock()
+	}
+}
+
+func (s *Streamer) broadcastAudio(track Track, audio []byte) {
+	// Estimate actual duration from file size (MP3 ~128kbps = 16000 bytes/sec)
+	estimatedDuration := len(audio) / 16000
+	if estimatedDuration < 10 {
+		estimatedDuration = 10
+	}
+	log.Printf("streamer: received %d bytes (~%ds), broadcasting to %d conns",
+		len(audio), estimatedDuration, s.ConnCount())
+
+	s.mu.Lock()
+	if s.onDurationKnown != nil {
+		go s.onDurationKnown(estimatedDuration)
+	}
+	s.audioData = audio
+	s.playStart = time.Now()
+	conns := make([]io.WriteCloser, 0, len(s.conns))
+	for conn := range s.conns {
+		conns = append(conns, conn)
+	}
+	s.mu.Unlock()
+
+	var failed []io.WriteCloser
+	for _, conn := range conns {
+		if err := s.sendTrack(conn, track, audio); err != nil {
+			failed = append(failed, conn)
+		}
+	}
+
 	if len(failed) > 0 {
 		s.mu.Lock()
 		for _, conn := range failed {

@@ -143,13 +143,21 @@ func runServer() {
 	}
 	jukeboxEngine := jukebox.NewEngine(backends)
 	streamer := jukebox.NewStreamer()
+	streamer.SetOnDurationKnown(func(seconds int) {
+		jukeboxEngine.UpdateDuration(seconds)
+	})
 	jukeboxEngine.SetOnTrackChange(func(track jukebox.Track) {
-		// YouTube tracks need URL resolved just before streaming
-		if track.Source == "youtube" && track.URL == "" && ytBackend != nil {
-			if err := ytBackend.ResolveAndSetURL(context.Background(), &track); err != nil {
-				log.Printf("youtube: failed to resolve URL for %s: %v", track.Title, err)
+		if track.Source == "youtube" && ytBackend != nil {
+			// Download and convert to MP3 via yt-dlp
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			audio, err := ytBackend.DownloadMP3(ctx, track.ID)
+			if err != nil {
+				log.Printf("youtube: failed to download %s: %v", track.Title, err)
 				return
 			}
+			streamer.StreamTrackWithAudio(track, audio)
+			return
 		}
 		streamer.StreamTrack(track)
 	})

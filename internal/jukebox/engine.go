@@ -73,6 +73,16 @@ func (e *Engine) SetListeners(n int) {
 	e.listeners = n
 }
 
+// UpdateDuration updates the current track's duration (e.g., from actual audio size).
+func (e *Engine) UpdateDuration(seconds int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.current != nil && seconds > 0 {
+		e.current.Duration = seconds
+		e.notifyChange()
+	}
+}
+
 func (e *Engine) Backends() []MusicBackend {
 	var enabled []MusicBackend
 	for _, b := range e.backends {

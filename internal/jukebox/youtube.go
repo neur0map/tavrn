@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -108,8 +110,7 @@ func (y *YouTube) StreamURL(ctx context.Context, trackID string) (string, error)
 	return url, nil
 }
 
-// resolveStreamURL gets the direct audio URL for a track before streaming.
-// Called by the streamer when it needs to download the audio.
+// ResolveAndSetURL gets the direct audio URL for a track before streaming.
 func (y *YouTube) ResolveAndSetURL(ctx context.Context, track *Track) error {
 	if track.URL != "" {
 		return nil
@@ -122,4 +123,43 @@ func (y *YouTube) ResolveAndSetURL(ctx context.Context, track *Track) error {
 	}
 	track.URL = url
 	return nil
+}
+
+// DownloadMP3 downloads the audio as MP3 bytes using yt-dlp + ffmpeg.
+// Downloads to a temp file since yt-dlp can't convert and pipe to stdout.
+func (y *YouTube) DownloadMP3(ctx context.Context, trackID string) ([]byte, error) {
+	tmpDir, err := os.MkdirTemp("", "tavrn-yt-*")
+	if err != nil {
+		return nil, fmt.Errorf("youtube: tmpdir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	outPath := filepath.Join(tmpDir, "audio.%(ext)s")
+	args := []string{
+		"-f", "bestaudio",
+		"-x", "--audio-format", "mp3",
+		"--audio-quality", "128K",
+		"-o", outPath,
+		"--no-warnings",
+		"--no-playlist",
+		fmt.Sprintf("https://www.youtube.com/watch?v=%s", trackID),
+	}
+	if y.proxy != "" {
+		args = append([]string{"--proxy", y.proxy}, args...)
+	}
+
+	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("youtube: download: %w", err)
+	}
+
+	mp3Path := filepath.Join(tmpDir, "audio.mp3")
+	data, err := os.ReadFile(mp3Path)
+	if err != nil {
+		return nil, fmt.Errorf("youtube: read mp3: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("youtube: empty audio for %s", trackID)
+	}
+	return data, nil
 }
