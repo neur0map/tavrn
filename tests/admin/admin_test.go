@@ -83,7 +83,7 @@ func TestAdminAddRoomRequiresName(t *testing.T) {
 
 func TestAdminAddRoom(t *testing.T) {
 	bin := buildAdmin(t)
-	dir := t.TempDir()
+	dir := filepath.Dir(bin) // signal files land next to the binary
 	cmd := exec.Command(bin, "--add-room", "arena")
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
@@ -123,7 +123,7 @@ func TestAdminPurge(t *testing.T) {
 
 func TestAdminMessage(t *testing.T) {
 	bin := buildAdmin(t)
-	dir := t.TempDir()
+	dir := filepath.Dir(bin) // signal files land next to the binary
 	cmd := exec.Command(bin, "--message", "test broadcast")
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
