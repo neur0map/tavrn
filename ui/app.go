@@ -667,6 +667,11 @@ func (a App) View() tea.View {
 			a.topBar.HasTrack = false
 			a.online.NowTitle = ""
 		}
+		if jstate.PendingGenre != jstate.ActiveGenre {
+			a.online.GenreSwitching = jstate.PendingGenre.String()
+		} else {
+			a.online.GenreSwitching = ""
+		}
 	}
 
 	topBar := a.topBar.View()
