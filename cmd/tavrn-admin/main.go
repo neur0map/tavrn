@@ -80,7 +80,7 @@ func getPort() int {
 }
 
 func runMessage(text string) {
-	if err := os.WriteFile(bannerFile, []byte(text), 0600); err != nil {
+	if err := os.WriteFile(resolvedPath(bannerFile), []byte(text), 0600); err != nil {
 		log.Fatalf("failed to write banner: %v", err)
 	}
 	fmt.Printf("Banner sent: %s\n", text)
@@ -92,7 +92,7 @@ func runAddRoom(name string) {
 		fmt.Println("Room name cannot be empty.")
 		os.Exit(1)
 	}
-	if err := os.WriteFile(addRoomFile, []byte(name), 0600); err != nil {
+	if err := os.WriteFile(resolvedPath(addRoomFile), []byte(name), 0600); err != nil {
 		log.Fatalf("failed to write addroom file: %v", err)
 	}
 	fmt.Printf("Room queued: #%s (will appear when server picks it up)\n", name)
@@ -100,11 +100,11 @@ func runAddRoom(name string) {
 
 func runPurge() {
 	// Broadcast purge to connected clients before wiping
-	os.WriteFile(".purge", []byte("1"), 0600)
+	os.WriteFile(resolvedPath(purgeFile), []byte("1"), 0600)
 	fmt.Println("Signaled connected clients...")
 	time.Sleep(2 * time.Second) // give server time to broadcast
 
-	st, err := store.New("tavrn.db")
+	st, err := store.New(resolvedDBPath())
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
@@ -128,7 +128,7 @@ func runPurge() {
 }
 
 func runServer() {
-	st, err := store.New("tavrn.db")
+	st, err := store.New(resolvedDBPath())
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
@@ -259,6 +259,20 @@ func runUpdate(restartServer bool) error {
 		fmt.Printf("Client update complete. Running commit %s\n", rev)
 	}
 	return nil
+}
+
+// resolvedPath returns the absolute path to a file next to the executable,
+// regardless of what directory the binary is invoked from.
+func resolvedPath(name string) string {
+	repoDir, err := executableRepoDir()
+	if err != nil {
+		return name // fallback to relative
+	}
+	return filepath.Join(repoDir, name)
+}
+
+func resolvedDBPath() string {
+	return resolvedPath("tavrn.db")
 }
 
 func executableRepoDir() (string, error) {
