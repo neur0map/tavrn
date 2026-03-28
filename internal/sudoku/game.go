@@ -10,6 +10,7 @@ type Cell struct {
 	Value    int
 	PlacedBy string // fingerprint, empty for clues
 	IsClue   bool
+	Locked   bool // correct placement — immutable
 }
 
 // Position identifies a row/col on the board.
@@ -66,16 +67,18 @@ func (g *Game) Place(fingerprint string, row, col, value int) int {
 	if row < 0 || row > 8 || col < 0 || col > 8 || value < 1 || value > 9 {
 		return 0
 	}
-	if g.board[row][col].IsClue {
+	cell := g.board[row][col]
+	if cell.IsClue || cell.Locked {
 		return 0
 	}
 	// Same value already there — no-op
-	if g.board[row][col].Value == value {
+	if cell.Value == value {
 		return 0
 	}
-	g.board[row][col] = Cell{Value: value, PlacedBy: fingerprint}
+	correct := g.solution[row][col] == value
+	g.board[row][col] = Cell{Value: value, PlacedBy: fingerprint, Locked: correct}
 	points := -1
-	if g.solution[row][col] == value {
+	if correct {
 		points = 1
 	}
 	g.scores[fingerprint] += points
@@ -91,7 +94,7 @@ func (g *Game) Clear(fingerprint string, row, col int) bool {
 		return false
 	}
 	cell := g.board[row][col]
-	if cell.IsClue || cell.PlacedBy != fingerprint || cell.Value == 0 {
+	if cell.IsClue || cell.Locked || cell.PlacedBy != fingerprint || cell.Value == 0 {
 		return false
 	}
 	g.board[row][col] = Cell{}

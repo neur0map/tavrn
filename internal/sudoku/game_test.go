@@ -108,7 +108,12 @@ func TestClearOwnPlacement(t *testing.T) {
 	g := NewGame("easy")
 
 	_, _, emptyR, emptyC := clueAndEmpty(g)
-	g.Place("player1", emptyR, emptyC, g.solution[emptyR][emptyC])
+	// Place a wrong number (correct placements are locked and can't be cleared)
+	wrongVal := g.solution[emptyR][emptyC]%9 + 1
+	if wrongVal == g.solution[emptyR][emptyC] {
+		wrongVal = wrongVal%9 + 1
+	}
+	g.Place("player1", emptyR, emptyC, wrongVal)
 
 	ok := g.Clear("player1", emptyR, emptyC)
 	if !ok {
@@ -116,6 +121,23 @@ func TestClearOwnPlacement(t *testing.T) {
 	}
 	if g.board[emptyR][emptyC].Value != 0 {
 		t.Fatal("cell not cleared")
+	}
+}
+
+func TestCorrectPlacementIsLocked(t *testing.T) {
+	g := NewGame("easy")
+
+	_, _, emptyR, emptyC := clueAndEmpty(g)
+	g.Place("player1", emptyR, emptyC, g.solution[emptyR][emptyC])
+
+	// Can't clear a locked cell
+	if g.Clear("player1", emptyR, emptyC) {
+		t.Fatal("should not be able to clear locked cell")
+	}
+	// Can't overwrite a locked cell
+	pts := g.Place("player1", emptyR, emptyC, g.solution[emptyR][emptyC]%9+1)
+	if pts != 0 {
+		t.Fatal("should not score on locked cell")
 	}
 }
 

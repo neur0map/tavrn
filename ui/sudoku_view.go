@@ -269,6 +269,9 @@ func (s SudokuView) renderBoard(board [9][9]sudoku.Cell, cursors map[string]sudo
 				styled = wrong.Render(cellStr)
 			case cell.IsClue:
 				styled = clue.Render(cellStr)
+			case cell.Locked:
+				// Correct placement — show in green
+				styled = lipgloss.NewStyle().Foreground(ColorGreen).Bold(true).Render(cellStr)
 			case cell.Value == 0:
 				styled = empty.Render(cellStr)
 			default:
