@@ -17,6 +17,7 @@ type EngineState struct {
 
 type Engine struct {
 	mu            sync.RWMutex
+	trackMu       sync.Mutex // serializes track changes (skip, auto-next)
 	lofi          *Lofi
 	current       *Track
 	playStart     time.Time
@@ -209,8 +210,11 @@ func (e *Engine) notifyChange() {
 }
 
 // fireTrackChange calls the track change callback synchronously.
-// Must be called WITHOUT the engine lock held.
+// Serialized by trackMu to prevent concurrent streamer calls.
+// Must be called WITHOUT the engine lock (e.mu) held.
 func (e *Engine) fireTrackChange(track Track) {
+	e.trackMu.Lock()
+	defer e.trackMu.Unlock()
 	e.mu.RLock()
 	fn := e.onTrackChange
 	e.mu.RUnlock()

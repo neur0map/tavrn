@@ -189,8 +189,24 @@ func (s *Server) audioChannelHandler(srv *ssh.Server, conn *gossh.ServerConn, ne
 	log.Printf("audio channel: client connected (%d total)", s.cfg.Streamer.ConnCount()+1)
 	s.cfg.Streamer.AddConn(ch)
 
-	// Block until connection closes
-	<-ctx.Done()
+	// Block until channel closes (skip) or session ends.
+	// Read from channel to detect close — a closed channel returns an error.
+	done := make(chan struct{})
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			if _, err := ch.Read(buf); err != nil {
+				close(done)
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+	case <-done:
+	}
+
 	s.cfg.Streamer.RemoveConn(ch)
 	ch.Close()
 	log.Printf("audio channel: client disconnected (%d remaining)", s.cfg.Streamer.ConnCount())
