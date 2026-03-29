@@ -144,13 +144,14 @@ func (c *ChatView) renderMessages() {
 	prevNick := ""
 	for i, msg := range c.messages {
 		if msg.IsBanner {
-			// Admin banner: eye-catching, framed
+			// Admin banner: eye-catching, framed, word-wrapped
 			bannerLine := lipgloss.NewStyle().Foreground(ColorAmber).Render("  ───")
-			bannerText := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).Render(
-				"  " + msg.Text)
+			bannerStyle := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true)
 			lines = append(lines, "")
 			lines = append(lines, bannerLine)
-			lines = append(lines, bannerText)
+			for _, wl := range wordWrap(msg.Text, c.viewport.Width()-8) {
+				lines = append(lines, bannerStyle.Render("  "+wl))
+			}
 			lines = append(lines, bannerLine)
 			lines = append(lines, "")
 			prevNick = ""
