@@ -2,6 +2,5 @@
 set -e
 /usr/sbin/setcap cap_net_bind_service=+ep /home/tavrn/tavrn/tavrn
 ln -sfn /home/tavrn/tavrn/tavrn        /usr/local/bin/tavrn
-ln -sfn /home/tavrn/tavrn/tavrn-client /usr/local/bin/tavrn-client
 /usr/bin/systemctl restart tavrn
 /usr/bin/systemctl --no-pager --lines=0 is-active tavrn

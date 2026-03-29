@@ -1,1 +1,1 @@
-tavrn ALL=(root) NOPASSWD: /usr/local/sbin/tavrn-finalize-update, /usr/local/sbin/tavrn-refresh-client, /usr/bin/systemctl restart tavrn
+tavrn ALL=(root) NOPASSWD: /usr/local/sbin/tavrn-finalize-update, /usr/bin/systemctl restart tavrn

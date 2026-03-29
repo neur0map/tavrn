@@ -1,3 +1,0 @@
-#!/bin/sh
-set -e
-ln -sfn /home/tavrn/tavrn/tavrn-client /usr/local/bin/tavrn-client
