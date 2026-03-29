@@ -33,7 +33,7 @@ fetch("/now-playing")
 
 function updateNowPlaying(data) {
   if (data.playing) {
-    nowPlaying.textContent = "\u266A " + data.title + " \u2022 " + data.artist + " \u2022 " + data.genre;
+    nowPlaying.textContent = "\u266A " + data.title + " \u2022 " + data.artist;
   } else {
     nowPlaying.textContent = "";
   }

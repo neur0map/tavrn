@@ -169,9 +169,7 @@ func runServer() {
 	}
 
 	catalog := jukebox.NewCatalog()
-	for _, g := range jukebox.AllGenres() {
-		log.Printf("Tavern Radio: %s — %d tracks", g, catalog.TrackCount(g))
-	}
+	log.Printf("Tavern Radio: %d tracks loaded", catalog.TrackCount())
 	jukeboxEngine := jukebox.NewEngineWithCatalog(catalog)
 	jukeboxEngine.SetOnlineCount(h.OnlineCount)
 	streamer := jukebox.NewStreamer()

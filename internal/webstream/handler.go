@@ -33,7 +33,6 @@ func (h *Handler) NowPlaying(w http.ResponseWriter, r *http.Request) {
 		resp["artist"] = state.Current.Artist
 		resp["duration"] = state.Current.Duration
 		resp["position"] = int(state.Position.Seconds())
-		resp["genre"] = state.ActiveGenre.String()
 	}
 	json.NewEncoder(w).Encode(resp)
 }
