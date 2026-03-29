@@ -44,6 +44,7 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Cache-Control", "no-cache, no-store")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -54,6 +55,9 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	// Subscribe to track changes
 	sub := h.streamer.SubscribeTrackChange()
 	defer h.streamer.UnsubscribeTrackChange(sub)
+
+	// bufferEnd estimates when the client will exhaust its buffered audio.
+	var bufferEnd time.Time
 
 	// Send current track from current position
 	track, audio, playStart := h.streamer.CurrentAudio()
@@ -73,9 +77,18 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		flusher.Flush()
+		remaining := duration - elapsed
+		if remaining < 0 {
+			remaining = 0
+		}
+		bufferEnd = time.Now().Add(time.Duration(remaining * float64(time.Second)))
 	}
 
-	// Stream subsequent tracks
+	// Keepalive: feed silent MP3 frames when the client buffer is nearly
+	// empty so the browser never thinks the stream has ended.
+	keepalive := time.NewTicker(500 * time.Millisecond)
+	defer keepalive.Stop()
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -92,6 +105,16 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
+			bufferEnd = time.Now().Add(time.Duration(track.Duration) * time.Second)
+		case <-keepalive.C:
+			// Send silence when the client is within 5s of running dry,
+			// or if no track has been sent yet.
+			if bufferEnd.IsZero() || time.Now().After(bufferEnd.Add(-5*time.Second)) {
+				if _, err := w.Write(SilentFrame); err != nil {
+					return
+				}
+				flusher.Flush()
+			}
 		}
 	}
 }

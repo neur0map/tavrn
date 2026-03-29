@@ -4,7 +4,9 @@ tavrn.sh {
 	rewrite @goget /goget.html
 
 	# Web audio streaming — proxied to tavrn admin
-	reverse_proxy /stream localhost:8090
+	reverse_proxy /stream localhost:8090 {
+		flush_interval -1
+	}
 	reverse_proxy /now-playing localhost:8090
 
 	file_server

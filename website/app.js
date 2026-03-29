@@ -46,6 +46,23 @@ function pollNowPlaying() {
     .catch(() => {});
 }
 
+// Handle stream interruptions — reconnect automatically
+audio.addEventListener("ended", () => {
+  if (playing) {
+    audio.src = "/stream?" + Date.now();
+    audio.play().catch(() => {});
+  }
+});
+
+audio.addEventListener("error", () => {
+  if (playing) {
+    setTimeout(() => {
+      audio.src = "/stream?" + Date.now();
+      audio.play().catch(() => {});
+    }, 2000);
+  }
+});
+
 if (playBtn) {
   playBtn.addEventListener("click", () => {
     if (playing) {
