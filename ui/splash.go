@@ -305,7 +305,7 @@ func (s Splash) renderCard() string {
 
 	b.WriteString(SplashDescStyle.Render("a terminal tavern over SSH."))
 	b.WriteString("\n")
-	b.WriteString(SplashDescStyle.Render("chat, listen to lofi, hang out."))
+	b.WriteString(SplashDescStyle.Render("chat, play games, hang out."))
 	b.WriteString("\n\n")
 
 	b.WriteString(SplashDescStyle.Italic(true).Render("no accounts. no logs. no rules."))
