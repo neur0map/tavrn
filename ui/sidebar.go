@@ -17,10 +17,11 @@ type RoomInfo struct {
 // ─────────────────────────────────────
 
 type RoomsPanel struct {
-	Rooms       []RoomInfo
-	CurrentRoom string
-	Width       int
-	Height      int
+	Rooms         []RoomInfo
+	CurrentRoom   string
+	Width         int
+	Height        int
+	MentionCounts map[string]int // room name → unread mention count
 }
 
 func NewRoomsPanel() RoomsPanel {
@@ -48,12 +49,26 @@ func (r RoomsPanel) View() string {
 			indicator := lipgloss.NewStyle().Foreground(ColorHighlight).Render("▸")
 			roomName := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).Render(name)
 			roomCount := lipgloss.NewStyle().Foreground(ColorDim).Render(count)
-			b.WriteString(indicator + roomName + roomCount + "\n")
+			line := indicator + roomName + roomCount
+			if r.MentionCounts != nil {
+				if mc := r.MentionCounts[rm.Name]; mc > 0 {
+					line += lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).
+						Render(fmt.Sprintf(" (%d)", mc))
+				}
+			}
+			b.WriteString(line + "\n")
 		} else {
 			// Other rooms: dimmer
 			roomName := lipgloss.NewStyle().Foreground(ColorSand).Render(name)
 			roomCount := lipgloss.NewStyle().Foreground(ColorDimmer).Render(count)
-			b.WriteString(" " + roomName + roomCount + "\n")
+			line := " " + roomName + roomCount
+			if r.MentionCounts != nil {
+				if mc := r.MentionCounts[rm.Name]; mc > 0 {
+					line += lipgloss.NewStyle().Foreground(ColorAmber).Bold(true).
+						Render(fmt.Sprintf(" (%d)", mc))
+				}
+			}
+			b.WriteString(line + "\n")
 		}
 	}
 

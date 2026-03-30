@@ -778,6 +778,15 @@ func (a App) View() tea.View {
 	}
 	a.rooms.Rooms = roomInfos
 
+	// Build mention counts for room badges
+	mentionCounts := make(map[string]int)
+	for _, m := range a.mentions {
+		if !m.Read {
+			mentionCounts[m.Room]++
+		}
+	}
+	a.rooms.MentionCounts = mentionCounts
+
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()
 
