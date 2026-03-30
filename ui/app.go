@@ -383,6 +383,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return a, tea.Quit
 		case "enter":
+			if a.chat.MentionPopupActive() {
+				// Let ChatView.Update handle Tab/Enter completion
+				break
+			}
 			return a.handleInput()
 		case "esc":
 			return a, nil
@@ -400,6 +404,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	a.chat, cmd = a.chat.Update(msg)
+
+	// Refresh mention autocomplete popup
+	sessions := a.hub.Sessions(a.session.Room)
+	var names []string
+	for _, s := range sessions {
+		if s.Fingerprint != a.session.Fingerprint {
+			names = append(names, s.Nickname)
+		}
+	}
+	a.chat.UpdateMentionPopup(names)
+
 	return a, cmd
 }
 

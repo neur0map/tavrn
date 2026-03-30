@@ -250,6 +250,36 @@ func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
+	// Handle mention popup keys first
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && c.mentionPopup {
+		switch keyMsg.String() {
+		case "up":
+			if c.mentionCursor > 0 {
+				c.mentionCursor--
+			} else if len(c.mentionNames) > 0 {
+				c.mentionCursor = len(c.mentionNames) - 1
+			}
+			return c, nil
+		case "down":
+			if c.mentionCursor < len(c.mentionNames)-1 {
+				c.mentionCursor++
+			} else {
+				c.mentionCursor = 0
+			}
+			return c, nil
+		case "tab", "enter":
+			if len(c.mentionNames) > 0 {
+				c.completeMention(c.mentionNames[c.mentionCursor])
+				return c, nil
+			}
+		case "esc":
+			c.mentionPopup = false
+			c.mentionNames = nil
+			c.mentionCursor = 0
+			return c, nil
+		}
+	}
+
 	// Route scroll keys to viewport
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
