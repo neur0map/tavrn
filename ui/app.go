@@ -614,6 +614,30 @@ func (a *App) handleHubMsg(msg session.Msg) {
 	case session.MsgRoomAdded:
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
 			fmt.Sprintf("New room available: #%s", msg.Text)))
+	case session.MsgRoomRenamed:
+		oldName := msg.Text
+		newName := msg.Room
+		if a.session.Room == oldName {
+			// We're in the renamed room — update session and reload
+			a.session.Room = newName
+			a.topBar.Room = newName
+			a.chat.AddMessage(chat.NewSystemMessage(newName,
+				fmt.Sprintf("This room was renamed to #%s", newName)))
+		} else {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				fmt.Sprintf("Room #%s renamed to #%s", oldName, newName)))
+		}
+	case session.MsgRoomRemoved:
+		removedRoom := msg.Text
+		if a.session.Room == removedRoom {
+			// We're in the removed room — move to lounge
+			a.switchRoom("lounge")
+			a.chat.AddMessage(chat.NewSystemMessage("lounge",
+				fmt.Sprintf("Room #%s was removed. You've been moved to #lounge.", removedRoom)))
+		} else {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				fmt.Sprintf("Room #%s has been removed", removedRoom)))
+		}
 	}
 }
 

@@ -21,6 +21,8 @@ const (
 	MsgNoteDelete
 	MsgBanner
 	MsgRoomAdded
+	MsgRoomRenamed  // room renamed: Text=old, Room=new
+	MsgRoomRemoved  // room removed: Text=removed room name
 	MsgSudokuPlace  // player places a number
 	MsgSudokuClear  // player clears a cell
 	MsgSudokuCheck  // check board request/response

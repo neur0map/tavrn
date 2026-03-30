@@ -25,6 +25,8 @@ import (
 
 const bannerFile = ".banner"
 const addRoomFile = ".addroom"
+const renameRoomFile = ".renameroom"
+const removeRoomFile = ".removeroom"
 const purgeFile = ".purge"
 
 func main() {
@@ -47,6 +49,20 @@ func main() {
 			}
 			runAddRoom(os.Args[2])
 			return
+		case "--rename-room":
+			if len(os.Args) < 4 {
+				fmt.Println("Usage: tavrn --rename-room \"old_name\" \"new_name\"")
+				os.Exit(1)
+			}
+			runRenameRoom(os.Args[2], os.Args[3])
+			return
+		case "--remove-room":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: tavrn --remove-room \"room_name\"")
+				os.Exit(1)
+			}
+			runRemoveRoom(os.Args[2])
+			return
 		case "--clear-banner":
 			runClearBanner()
 			return
@@ -57,13 +73,15 @@ func main() {
 			return
 		case "help", "--help", "-h":
 			fmt.Println("Maintainer commands:")
-			fmt.Println("  tavrn                       Start the SSH server")
-			fmt.Println("  tavrn purge                 Purge all data")
-			fmt.Println("  tavrn --message \"text\"      Send banner to all connected users")
-			fmt.Println("  tavrn --clear-banner        Clear the active banner")
-			fmt.Println("  tavrn --add-room \"name\"     Add a new room (live, no restart)")
-			fmt.Println("  tavrn --update              Pull main, rebuild server binary, and restart the service")
-			fmt.Println("  tavrn --web-audio           Start with web audio streaming on :8090")
+			fmt.Println("  tavrn                            Start the SSH server")
+			fmt.Println("  tavrn purge                      Purge all data")
+			fmt.Println("  tavrn --message \"text\"           Send banner to all connected users")
+			fmt.Println("  tavrn --clear-banner             Clear the active banner")
+			fmt.Println("  tavrn --add-room \"name\"          Add a new room (live, no restart)")
+			fmt.Println("  tavrn --rename-room \"old\" \"new\"  Rename a room (live)")
+			fmt.Println("  tavrn --remove-room \"name\"       Remove a room (live, moves users to #lounge)")
+			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
+			fmt.Println("  tavrn --web-audio                Start with web audio streaming on :8090")
 			return
 		}
 	}
@@ -116,6 +134,38 @@ func runAddRoom(name string) {
 		log.Fatalf("failed to write addroom file: %v", err)
 	}
 	fmt.Printf("Room queued: #%s (will appear when server picks it up)\n", name)
+}
+
+func runRenameRoom(oldName, newName string) {
+	oldName = strings.ToLower(strings.TrimSpace(oldName))
+	newName = strings.ToLower(strings.TrimSpace(newName))
+	if oldName == "" || newName == "" {
+		fmt.Println("Room names cannot be empty.")
+		os.Exit(1)
+	}
+	// Format: "old:new"
+	payload := oldName + ":" + newName
+	if err := os.WriteFile(resolvedPath(renameRoomFile), []byte(payload), 0600); err != nil {
+		log.Fatalf("failed to write rename file: %v", err)
+	}
+	fmt.Printf("Rename queued: #%s → #%s (will apply when server picks it up)\n", oldName, newName)
+}
+
+func runRemoveRoom(name string) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		fmt.Println("Room name cannot be empty.")
+		os.Exit(1)
+	}
+	protected := map[string]bool{"lounge": true, "gallery": true, "games": true}
+	if protected[name] {
+		fmt.Printf("Cannot remove built-in room #%s\n", name)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(resolvedPath(removeRoomFile), []byte(name), 0600); err != nil {
+		log.Fatalf("failed to write remove file: %v", err)
+	}
+	fmt.Printf("Remove queued: #%s (users will be moved to #lounge)\n", name)
 }
 
 func runPurge() {
@@ -214,6 +264,8 @@ func runServer() {
 	go startGalleryCleanup(st, h)
 	go watchBannerFile(st, h)
 	go watchAddRoomFile(st, h)
+	go watchRenameRoomFile(st, h)
+	go watchRemoveRoomFile(st, h)
 	go watchPurgeFile(h)
 
 	done := make(chan os.Signal, 1)
@@ -501,6 +553,82 @@ func watchAddRoomFile(st *store.Store, h *hub.Hub) {
 		log.Printf("Room added: #%s", name)
 		h.BroadcastAll(session.Msg{
 			Type: session.MsgRoomAdded,
+			Text: name,
+		})
+	}
+}
+
+func watchRenameRoomFile(st *store.Store, h *hub.Hub) {
+	for {
+		time.Sleep(1 * time.Second)
+
+		data, err := os.ReadFile(renameRoomFile)
+		if err != nil {
+			continue
+		}
+
+		payload := strings.TrimSpace(string(data))
+		os.Remove(renameRoomFile)
+
+		parts := strings.SplitN(payload, ":", 2)
+		if len(parts) != 2 {
+			log.Printf("Invalid rename payload: %q", payload)
+			continue
+		}
+		oldName := strings.ToLower(parts[0])
+		newName := strings.ToLower(parts[1])
+
+		if !st.IsRoom(oldName) {
+			log.Printf("Room #%s does not exist", oldName)
+			continue
+		}
+		if st.IsRoom(newName) {
+			log.Printf("Room #%s already exists", newName)
+			continue
+		}
+
+		if err := st.RenameRoom(oldName, newName); err != nil {
+			log.Printf("Failed to rename room: %v", err)
+			continue
+		}
+
+		log.Printf("Room renamed: #%s → #%s", oldName, newName)
+		h.BroadcastAll(session.Msg{
+			Type: session.MsgRoomRenamed,
+			Text: oldName,
+			Room: newName,
+		})
+	}
+}
+
+func watchRemoveRoomFile(st *store.Store, h *hub.Hub) {
+	for {
+		time.Sleep(1 * time.Second)
+
+		data, err := os.ReadFile(removeRoomFile)
+		if err != nil {
+			continue
+		}
+
+		name := strings.ToLower(strings.TrimSpace(string(data)))
+		if name == "" {
+			continue
+		}
+		os.Remove(removeRoomFile)
+
+		if !st.IsRoom(name) {
+			log.Printf("Room #%s does not exist", name)
+			continue
+		}
+
+		if err := st.DeleteRoom(name); err != nil {
+			log.Printf("Failed to remove room: %v", err)
+			continue
+		}
+
+		log.Printf("Room removed: #%s", name)
+		h.BroadcastAll(session.Msg{
+			Type: session.MsgRoomRemoved,
 			Text: name,
 		})
 	}

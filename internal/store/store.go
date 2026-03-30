@@ -413,6 +413,36 @@ func (s *Store) AllRooms() []string {
 	return rooms
 }
 
+func (s *Store) RenameRoom(oldName, newName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Rename the room
+	if _, err := tx.Exec(`UPDATE rooms SET name = ? WHERE name = ?`, newName, oldName); err != nil {
+		return err
+	}
+	// Update chat history to point to new room name
+	tx.Exec(`UPDATE chat_messages SET room = ? WHERE room = ?`, newName, oldName)
+	return tx.Commit()
+}
+
+func (s *Store) DeleteRoom(name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	tx.Exec(`DELETE FROM rooms WHERE name = ?`, name)
+	tx.Exec(`DELETE FROM chat_messages WHERE room = ?`, name)
+	return tx.Commit()
+}
+
 func (s *Store) IsRoom(name string) bool {
 	row := s.db.QueryRow(`SELECT COUNT(*) FROM rooms WHERE name = ?`, name)
 	var count int
