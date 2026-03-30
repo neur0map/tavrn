@@ -227,6 +227,38 @@ func (s *Store) FingerprintByNickname(nickname string) (string, error) {
 	return fp, nil
 }
 
+// BanRow represents a ban entry.
+type BanRow struct {
+	Fingerprint string
+	Nickname    string
+	Reason      string
+	BannedAt    string
+}
+
+// BanList returns all active bans with nicknames.
+func (s *Store) BanList() ([]BanRow, error) {
+	rows, err := s.db.Query(`
+		SELECT b.fingerprint, COALESCE(u.nickname, '(unknown)'), b.reason, b.banned_at
+		FROM bans b
+		LEFT JOIN users u ON b.fingerprint = u.fingerprint
+		WHERE b.expires_at IS NULL OR b.expires_at > CURRENT_TIMESTAMP
+		ORDER BY b.banned_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bans []BanRow
+	for rows.Next() {
+		var b BanRow
+		if err := rows.Scan(&b.Fingerprint, &b.Nickname, &b.Reason, &b.BannedAt); err != nil {
+			continue
+		}
+		bans = append(bans, b)
+	}
+	return bans, nil
+}
+
 func (s *Store) RecordVisitor(fingerprint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

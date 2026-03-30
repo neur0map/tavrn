@@ -78,6 +78,9 @@ func main() {
 			}
 			runUnban(os.Args[2])
 			return
+		case "--ban-list":
+			runBanList()
+			return
 		case "--clear-banner":
 			runClearBanner()
 			return
@@ -97,6 +100,7 @@ func main() {
 			fmt.Println("  tavrn --remove-room \"name\"       Remove a room (live, moves users to #lounge)")
 			fmt.Println("  tavrn --ban \"nickname\"           Ban a user by nickname (live, kicks them)")
 			fmt.Println("  tavrn --unban \"nickname\"         Unban a user by nickname")
+			fmt.Println("  tavrn --ban-list                 Show all active bans")
 			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
 			fmt.Println("  tavrn --web-audio                Start with web audio streaming on :8090")
 			return
@@ -237,6 +241,34 @@ func runUnban(nickname string) {
 		log.Fatalf("unban failed: %v", err)
 	}
 	fmt.Printf("Unbanned %s.\n", nickname)
+}
+
+func runBanList() {
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	bans, err := st.BanList()
+	if err != nil {
+		log.Fatalf("failed to list bans: %v", err)
+	}
+	if len(bans) == 0 {
+		fmt.Println("No active bans.")
+		return
+	}
+
+	fmt.Printf("%-20s %-20s %s\n", "NICKNAME", "BANNED AT", "FINGERPRINT")
+	fmt.Println(strings.Repeat("─", 64))
+	for _, b := range bans {
+		fp := b.Fingerprint
+		if len(fp) > 16 {
+			fp = fp[:16] + "..."
+		}
+		fmt.Printf("%-20s %-20s %s\n", b.Nickname, b.BannedAt, fp)
+	}
+	fmt.Printf("\n%d ban(s) total.\n", len(bans))
 }
 
 func runPurge() {
