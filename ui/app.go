@@ -14,6 +14,7 @@ import (
 	"tavrn.sh/internal/chat"
 	"tavrn.sh/internal/hub"
 	"tavrn.sh/internal/identity"
+	"tavrn.sh/internal/mention"
 	"tavrn.sh/internal/sanitize"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
@@ -64,6 +65,9 @@ type App struct {
 	joinRoomModal   JoinRoomModal
 	postModal       PostModal
 	expandNoteModal ExpandNoteModal
+
+	// Mentions
+	mentions []mention.Mention
 
 	// Sudoku
 	sudokuView *SudokuView
@@ -543,6 +547,7 @@ func (a *App) handleHubMsg(msg session.Msg) {
 		} else {
 			a.chat.AddMessage(chatMsg)
 		}
+		a.detectMentions(msg)
 	case session.MsgBanner:
 		a.chat.AddMessage(chat.NewBannerMessage(a.session.Room, msg.Text))
 	case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
@@ -576,6 +581,49 @@ func (a *App) handleHubMsg(msg session.Msg) {
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
 			fmt.Sprintf("New room available: #%s", msg.Text)))
 	}
+}
+
+// detectMentions checks if an incoming message mentions this user.
+func (a *App) detectMentions(msg session.Msg) {
+	if msg.Type != session.MsgChat {
+		return
+	}
+	if msg.Fingerprint == a.session.Fingerprint {
+		return // don't notify yourself
+	}
+	if !mention.IsMentioned(msg.Text, a.session.Nickname) {
+		return
+	}
+
+	m := mention.Mention{
+		Room:       msg.Room,
+		Author:     msg.Nickname,
+		ColorIndex: msg.ColorIndex,
+		Text:       msg.Text,
+		Timestamp:  msg.Timestamp,
+	}
+	if m.Timestamp.IsZero() {
+		m.Timestamp = time.Now()
+	}
+	a.mentions = append(a.mentions, m)
+
+	// Toast notification if not currently viewing that room's chat
+	if msg.Room != a.session.Room || a.session.Room == "gallery" || a.session.Room == "games" {
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+			fmt.Sprintf("%s mentioned you in #%s", msg.Nickname, msg.Room)))
+	}
+}
+
+// unreadMentionCount returns the number of unread mentions for a room.
+// If room is empty, returns total unread count.
+func (a *App) unreadMentionCount(room string) int {
+	count := 0
+	for _, m := range a.mentions {
+		if !m.Read && (room == "" || m.Room == room) {
+			count++
+		}
+	}
+	return count
 }
 
 func (a *App) switchRoom(target string) {
