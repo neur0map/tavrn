@@ -27,6 +27,7 @@ const bannerFile = ".banner"
 const addRoomFile = ".addroom"
 const renameRoomFile = ".renameroom"
 const removeRoomFile = ".removeroom"
+const banFile = ".ban"
 const purgeFile = ".purge"
 
 func main() {
@@ -63,6 +64,20 @@ func main() {
 			}
 			runRemoveRoom(os.Args[2])
 			return
+		case "--ban":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: tavrn --ban \"nickname\"")
+				os.Exit(1)
+			}
+			runBan(os.Args[2])
+			return
+		case "--unban":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: tavrn --unban \"nickname\"")
+				os.Exit(1)
+			}
+			runUnban(os.Args[2])
+			return
 		case "--clear-banner":
 			runClearBanner()
 			return
@@ -80,6 +95,8 @@ func main() {
 			fmt.Println("  tavrn --add-room \"name\"          Add a new room (live, no restart)")
 			fmt.Println("  tavrn --rename-room \"old\" \"new\"  Rename a room (live)")
 			fmt.Println("  tavrn --remove-room \"name\"       Remove a room (live, moves users to #lounge)")
+			fmt.Println("  tavrn --ban \"nickname\"           Ban a user by nickname (live, kicks them)")
+			fmt.Println("  tavrn --unban \"nickname\"         Unban a user by nickname")
 			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
 			fmt.Println("  tavrn --web-audio                Start with web audio streaming on :8090")
 			return
@@ -166,6 +183,60 @@ func runRemoveRoom(name string) {
 		log.Fatalf("failed to write remove file: %v", err)
 	}
 	fmt.Printf("Remove queued: #%s (users will be moved to #lounge)\n", name)
+}
+
+func runBan(nickname string) {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		fmt.Println("Nickname cannot be empty.")
+		os.Exit(1)
+	}
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	fp, err := st.FingerprintByNickname(nickname)
+	if err != nil {
+		fmt.Printf("User %q not found.\n", nickname)
+		os.Exit(1)
+	}
+
+	if err := st.Ban(fp, "banned by admin", nil); err != nil {
+		log.Fatalf("ban failed: %v", err)
+	}
+
+	// Signal the server to kick them
+	if err := os.WriteFile(resolvedPath(banFile), []byte(fp), 0600); err != nil {
+		log.Fatalf("failed to write ban file: %v", err)
+	}
+
+	fmt.Printf("Banned %s (fingerprint: %s). They will be kicked if online.\n", nickname, fp[:16]+"...")
+}
+
+func runUnban(nickname string) {
+	nickname = strings.TrimSpace(nickname)
+	if nickname == "" {
+		fmt.Println("Nickname cannot be empty.")
+		os.Exit(1)
+	}
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	fp, err := st.FingerprintByNickname(nickname)
+	if err != nil {
+		fmt.Printf("User %q not found.\n", nickname)
+		os.Exit(1)
+	}
+
+	if err := st.Unban(fp); err != nil {
+		log.Fatalf("unban failed: %v", err)
+	}
+	fmt.Printf("Unbanned %s.\n", nickname)
 }
 
 func runPurge() {
@@ -266,6 +337,7 @@ func runServer() {
 	go watchAddRoomFile(st, h)
 	go watchRenameRoomFile(st, h)
 	go watchRemoveRoomFile(st, h)
+	go watchBanFile(h)
 	go watchPurgeFile(h)
 
 	done := make(chan os.Signal, 1)
@@ -631,6 +703,27 @@ func watchRemoveRoomFile(st *store.Store, h *hub.Hub) {
 			Type: session.MsgRoomRemoved,
 			Text: name,
 		})
+	}
+}
+
+func watchBanFile(h *hub.Hub) {
+	for {
+		time.Sleep(1 * time.Second)
+
+		data, err := os.ReadFile(banFile)
+		if err != nil {
+			continue
+		}
+
+		fp := strings.TrimSpace(string(data))
+		if fp == "" {
+			continue
+		}
+		os.Remove(banFile)
+
+		if h.Kick(fp) {
+			log.Printf("Kicked banned user: %s", fp[:16]+"...")
+		}
 	}
 }
 

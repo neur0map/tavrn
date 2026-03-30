@@ -105,6 +105,19 @@ func (h *Hub) Sessions(room string) []*session.Session {
 	return result
 }
 
+// Kick disconnects a session by fingerprint. Returns true if found.
+func (h *Hub) Kick(fingerprint string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	s, ok := h.sessions[fingerprint]
+	if !ok {
+		return false
+	}
+	close(s.Send)
+	delete(h.sessions, fingerprint)
+	return true
+}
+
 // DisconnectAll closes all session send channels.
 func (h *Hub) DisconnectAll() {
 	h.mu.Lock()

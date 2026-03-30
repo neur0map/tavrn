@@ -217,6 +217,16 @@ func (s *Store) Unban(fingerprint string) error {
 	return err
 }
 
+// FingerprintByNickname looks up a user's fingerprint by their nickname.
+func (s *Store) FingerprintByNickname(nickname string) (string, error) {
+	row := s.db.QueryRow(`SELECT fingerprint FROM users WHERE nickname = ?`, nickname)
+	var fp string
+	if err := row.Scan(&fp); err != nil {
+		return "", err
+	}
+	return fp, nil
+}
+
 func (s *Store) RecordVisitor(fingerprint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
