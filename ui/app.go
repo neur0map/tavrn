@@ -81,7 +81,7 @@ type App struct {
 }
 
 func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(session.Msg), game *sudoku.Game) App {
-	return App{
+	app := App{
 		state:      stateSplash,
 		splash:     NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair),
 		session:    sess,
@@ -97,6 +97,8 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		modal:      ModalNone,
 		sudokuGame: game,
 	}
+	app.chat.SetOwnNickname(sess.Nickname)
+	return app
 }
 
 func WaitForHubMsg(ch <-chan session.Msg) tea.Cmd {
@@ -510,6 +512,7 @@ func (a App) applyNickChange(nick string) (tea.Model, tea.Cmd) {
 	}
 	oldNick := a.session.Nickname
 	a.session.Nickname = cleaned
+	a.chat.SetOwnNickname(cleaned)
 	a.modal = ModalNone
 	a.onSend(session.Msg{
 		Type: session.MsgSystem,
@@ -583,6 +586,7 @@ func (a *App) handleHubMsg(msg session.Msg) {
 	case session.MsgPurge:
 		a.chat = NewChatView()
 		a.doLayout()
+		a.chat.SetOwnNickname(a.session.Nickname)
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
 			"The tavern has been swept clean."))
 	case session.MsgTyping:
@@ -725,6 +729,7 @@ func (a *App) switchRoom(target string) {
 	// Clear and load new room content
 	a.chat = NewChatView()
 	a.doLayout()
+	a.chat.SetOwnNickname(a.session.Nickname)
 
 	if target == "gallery" {
 		// Load gallery notes

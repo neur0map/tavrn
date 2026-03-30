@@ -43,6 +43,8 @@ type ChatView struct {
 	mentionQuery  string
 	mentionNames  []string // filtered results from fuzzy.Match
 	mentionCursor int      // selected index
+
+	ownNickname string
 }
 
 func NewChatView() ChatView {
@@ -81,6 +83,28 @@ func (c *ChatView) SetSize(width, height int) {
 	c.viewport.SetWidth(vpW)
 	c.viewport.SetHeight(vpH)
 	c.input.SetWidth(width - 10)
+}
+
+// SetOwnNickname sets the current user's nickname for mention highlighting.
+func (c *ChatView) SetOwnNickname(nick string) {
+	c.ownNickname = nick
+}
+
+// highlightMentions replaces @name tokens with styled versions.
+func (c ChatView) highlightMentions(text, ownNick string) string {
+	words := strings.Fields(text)
+	for i, word := range words {
+		if len(word) > 1 && word[0] == '@' {
+			name := strings.TrimRight(word[1:], ".,!?;:")
+			trailing := word[1+len(name):]
+			if strings.EqualFold(name, ownNick) {
+				words[i] = MentionSelfStyle.Render("@"+name) + trailing
+			} else {
+				words[i] = MentionHighlightStyle.Render("@"+name) + trailing
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func (c *ChatView) AddMessage(msg chat.Message) {
@@ -189,7 +213,8 @@ func (c *ChatView) renderMessages() {
 		}
 
 		// Message body — indented under nick
-		msgLines := wordWrap(msg.Text, c.viewport.Width()-8)
+		highlighted := c.highlightMentions(msg.Text, c.ownNickname)
+		msgLines := wordWrap(highlighted, c.viewport.Width()-8)
 		for _, ml := range msgLines {
 			body := "      " + ml
 			lines = append(lines, body)
