@@ -3,11 +3,15 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"tavrn.sh/internal/chat"
+	"tavrn.sh/internal/mention"
 )
 
 type ModalType int
@@ -20,6 +24,7 @@ const (
 	ModalPost
 	ModalExpandNote
 	ModalAdminConfirm
+	ModalMention
 )
 
 // CloseModalMsg signals modal should close.
@@ -27,6 +32,9 @@ type CloseModalMsg struct{}
 
 // NickChangeMsg carries the new nickname from the modal.
 type NickChangeMsg struct{ Nick string }
+
+// MentionJumpMsg signals the user wants to jump to a mentioned room.
+type MentionJumpMsg struct{ Room string }
 
 // ─────────────────────────────────────
 // Help Modal
@@ -548,4 +556,127 @@ func (a AdminConfirmModal) View(width, height int) string {
 		BorderForeground(lipgloss.Color("131")).
 		Padding(1, 2).
 		Render(b5.String())
+}
+
+// ─────────────────────────────────────
+// Mention Modal
+// ─────────────────────────────────────
+
+type MentionModal struct {
+	mentions []mention.Mention
+	contexts [][]chat.Message // context messages per mention (3 before)
+	current  int
+}
+
+func NewMentionModal(mentions []mention.Mention, contexts [][]chat.Message) MentionModal {
+	return MentionModal{
+		mentions: mentions,
+		contexts: contexts,
+		current:  0,
+	}
+}
+
+func (m MentionModal) Update(msg tea.Msg) (MentionModal, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			return m, func() tea.Msg { return CloseModalMsg{} }
+		case "enter":
+			if len(m.mentions) > 0 {
+				room := m.mentions[m.current].Room
+				return m, func() tea.Msg { return MentionJumpMsg{Room: room} }
+			}
+		case "left":
+			if m.current > 0 {
+				m.current--
+			}
+		case "right":
+			if m.current < len(m.mentions)-1 {
+				m.current++
+			}
+		}
+	}
+	return m, nil
+}
+
+// Current returns the index of the currently viewed mention.
+func (m MentionModal) Current() int {
+	return m.current
+}
+
+func (m MentionModal) View(width, height int) string {
+	if len(m.mentions) == 0 {
+		return ""
+	}
+
+	modalW := 52
+	cur := m.mentions[m.current]
+
+	// Header
+	headerText := fmt.Sprintf(" @mention from %s in #%s ", cur.Author, cur.Room)
+	counter := fmt.Sprintf(" %d/%d ", m.current+1, len(m.mentions))
+	fillLen := modalW - len(headerText) - len(counter)
+	if fillLen < 2 {
+		fillLen = 2
+	}
+	leftFill := strings.Repeat("╱", fillLen/2)
+	rightFill := strings.Repeat("╱", fillLen-fillLen/2)
+
+	headerFill := lipgloss.NewStyle().Foreground(ColorBorder).Render(leftFill)
+	headerTitle := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render(headerText)
+	counterText := lipgloss.NewStyle().Foreground(ColorDim).Render(counter)
+	headerFillR := lipgloss.NewStyle().Foreground(ColorBorder).Render(rightFill)
+	header := headerFill + headerTitle + counterText + headerFillR
+
+	var b strings.Builder
+	b.WriteString(header)
+	b.WriteString("\n\n")
+
+	dim := lipgloss.NewStyle().Foreground(ColorDim)
+	wrapWidth := modalW - 6
+
+	// Context messages (dimmed)
+	if m.current < len(m.contexts) {
+		for _, ctx := range m.contexts[m.current] {
+			nick := lipgloss.NewStyle().Foreground(NickColors[ctx.ColorIndex%len(NickColors)]).
+				Render(ctx.Nickname)
+			ts := dim.Render(formatTimestamp(ctx.Timestamp, time.Now()))
+			b.WriteString(fmt.Sprintf("  %s  %s\n", nick, ts))
+			wrapped := wordWrap(ctx.Text, wrapWidth)
+			for _, line := range wrapped {
+				b.WriteString(dim.Render("      "+line) + "\n")
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	// The mentioned message (highlighted)
+	highlight := lipgloss.NewStyle().Foreground(ColorAmber).Bold(true)
+	nickColor := NickColors[cur.ColorIndex%len(NickColors)]
+	nick := lipgloss.NewStyle().Foreground(nickColor).Bold(true).Render(cur.Author)
+	ts := dim.Render(formatTimestamp(cur.Timestamp, time.Now()))
+	b.WriteString(fmt.Sprintf("▸ %s  %s\n", nick, ts))
+	wrapped := wordWrap(cur.Text, wrapWidth)
+	for _, line := range wrapped {
+		b.WriteString(highlight.Render("▸     "+line) + "\n")
+	}
+
+	// Footer
+	b.WriteString("\n")
+	footerFill := lipgloss.NewStyle().Foreground(ColorBorder).Render(
+		strings.Repeat("╱", modalW))
+	b.WriteString(footerFill)
+	b.WriteString("\n")
+
+	arrows := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("←→")
+	enter := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ENTER")
+	esc := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Render("ESC")
+	b.WriteString(lipgloss.NewStyle().Foreground(ColorDim).Render(
+		fmt.Sprintf("  %s prev/next  ·  %s jump  ·  %s close", arrows, enter, esc)))
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorBorder).
+		Padding(1, 2).
+		Render(b.String())
 }
