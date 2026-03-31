@@ -9,6 +9,7 @@ import (
 type BottomBar struct {
 	Width        int
 	IsGallery    bool
+	IsTankard    bool
 	MentionCount int
 }
 
@@ -22,7 +23,11 @@ func (b BottomBar) View() string {
 	sep := lipgloss.NewStyle().Foreground(ColorDimmer).Render("  ·  ")
 
 	var content string
-	if b.IsGallery {
+	if b.IsTankard {
+		content = "  " +
+			k.Render("SPACE") + " " + d.Render("drink") + sep +
+			k.Render("ESC") + " " + d.Render("back")
+	} else if b.IsGallery {
 		content = "  " +
 			k.Render("P") + " " + d.Render("post") + sep +
 			k.Render("E") + " " + d.Render("expand") + sep +
@@ -38,6 +43,7 @@ func (b BottomBar) View() string {
 			k.Render("F2") + " " + d.Render("nick") + sep +
 			k.Render("F3") + " " + d.Render("rooms") + sep +
 			f4 + sep +
+			k.Render("F6") + " " + d.Render("tankard") + sep +
 			k.Render("SHIFT+↑↓") + " " + d.Render("scroll")
 	}
 

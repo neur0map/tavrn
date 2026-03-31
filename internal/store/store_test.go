@@ -220,3 +220,57 @@ func TestIsRoom(t *testing.T) {
 		t.Error("arena should be valid after AddRoom")
 	}
 }
+
+func TestDrinkCountInitialZero(t *testing.T) {
+	s := tempStore(t)
+	count, err := s.GetDrinkCount("fp1")
+	if err != nil {
+		t.Fatalf("GetDrinkCount: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("initial count = %d, want 0", count)
+	}
+}
+
+func TestIncrementDrinkCount(t *testing.T) {
+	s := tempStore(t)
+	for i := 1; i <= 3; i++ {
+		got, err := s.IncrementDrinkCount("fp1")
+		if err != nil {
+			t.Fatalf("IncrementDrinkCount #%d: %v", i, err)
+		}
+		if got != i {
+			t.Errorf("after increment #%d: got %d, want %d", i, got, i)
+		}
+	}
+	count, _ := s.GetDrinkCount("fp1")
+	if count != 3 {
+		t.Errorf("final count = %d, want 3", count)
+	}
+}
+
+func TestDrinkCountSurvivesPurge(t *testing.T) {
+	s := tempStore(t)
+	s.IncrementDrinkCount("fp1")
+	s.IncrementDrinkCount("fp1")
+	s.PurgeAll()
+	count, _ := s.GetDrinkCount("fp1")
+	if count != 2 {
+		t.Errorf("count after purge = %d, want 2", count)
+	}
+}
+
+func TestDrinkCountPerUser(t *testing.T) {
+	s := tempStore(t)
+	s.IncrementDrinkCount("fp1")
+	s.IncrementDrinkCount("fp1")
+	s.IncrementDrinkCount("fp2")
+	c1, _ := s.GetDrinkCount("fp1")
+	c2, _ := s.GetDrinkCount("fp2")
+	if c1 != 2 {
+		t.Errorf("fp1 count = %d, want 2", c1)
+	}
+	if c2 != 1 {
+		t.Errorf("fp2 count = %d, want 1", c2)
+	}
+}

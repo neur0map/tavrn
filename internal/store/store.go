@@ -98,6 +98,10 @@ func (s *Store) migrate() error {
 	CREATE TABLE IF NOT EXISTS all_time_visitors (
 		fp_hash TEXT PRIMARY KEY
 	);
+	CREATE TABLE IF NOT EXISTS drink_counts (
+		fingerprint TEXT PRIMARY KEY,
+		count       INTEGER NOT NULL DEFAULT 0
+	);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -553,4 +557,32 @@ func (s *Store) ClearBanner() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.db.Exec(`DELETE FROM banner`)
+}
+
+// ── Drink Counts (survives purges) ──
+
+func (s *Store) GetDrinkCount(fingerprint string) (int, error) {
+	row := s.db.QueryRow(`SELECT count FROM drink_counts WHERE fingerprint = ?`, fingerprint)
+	var count int
+	err := row.Scan(&count)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return count, err
+}
+
+func (s *Store) IncrementDrinkCount(fingerprint string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`
+		INSERT INTO drink_counts (fingerprint, count) VALUES (?, 1)
+		ON CONFLICT(fingerprint) DO UPDATE SET count = count + 1
+	`, fingerprint)
+	if err != nil {
+		return 0, err
+	}
+	row := s.db.QueryRow(`SELECT count FROM drink_counts WHERE fingerprint = ?`, fingerprint)
+	var count int
+	err = row.Scan(&count)
+	return count, err
 }

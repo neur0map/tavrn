@@ -99,10 +99,11 @@ func (r RoomsPanel) View() string {
 const maxVisibleUsers = 5
 
 type OnlinePanel struct {
-	Users  []string
-	Width  int
-	Height int
-	Frame  int // for animated online dots
+	Users   []string
+	Width   int
+	Height  int
+	Frame   int // for animated online dots
+	Tankard *TankardView
 }
 
 func NewOnlinePanel() OnlinePanel {
@@ -111,6 +112,8 @@ func NewOnlinePanel() OnlinePanel {
 
 // Animated dot cycles for online presence
 var onlineDotFrames = []string{"●", "●", "◉", "●"}
+
+const tankardHeight = 6 // 4 art lines + 1 counter + 1 separator
 
 func (o OnlinePanel) View() string {
 	header := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
@@ -151,9 +154,35 @@ func (o OnlinePanel) View() string {
 		}
 	}
 
+	usersContent := b.String()
+
+	// Render tankard below users if there's room
+	if o.Tankard != nil && o.Height >= 20 {
+		tankardArt := o.Tankard.View()
+		tankardSep := dimmer.Render(strings.Repeat("─", o.Width-4))
+
+		// Calculate padding to push tankard to bottom
+		// Inner height = Height - border(0) - paddingTop(1)
+		innerH := o.Height - 1
+		usersLines := strings.Count(usersContent, "\n") + 1
+		tankardLines := strings.Count(tankardArt, "\n") + 1
+		sepLine := 1
+		gap := innerH - usersLines - tankardLines - sepLine
+		if gap < 0 {
+			gap = 0
+		}
+
+		full := usersContent + strings.Repeat("\n", gap) + tankardSep + "\n" + tankardArt
+		return RightSidebarStyle.
+			Width(o.Width).
+			Height(o.Height).
+			MaxHeight(o.Height).
+			Render(full)
+	}
+
 	return RightSidebarStyle.
 		Width(o.Width).
 		Height(o.Height).
 		MaxHeight(o.Height).
-		Render(b.String())
+		Render(usersContent)
 }

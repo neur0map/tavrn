@@ -74,6 +74,10 @@ type App struct {
 	sudokuView *SudokuView
 	sudokuGame *sudoku.Game
 
+	// Tankard collectible
+	tankard        TankardView
+	tankardFocused bool
+
 	// Transition animation
 	transSpring harmonica.Spring
 	transPos    float64 // 0.0 = fully hidden, 1.0 = fully revealed
@@ -98,6 +102,9 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		sudokuGame: game,
 	}
 	app.chat.SetOwnNickname(sess.Nickname)
+	drinkCount, _ := st.GetDrinkCount(sess.Fingerprint)
+	app.tankard = NewTankardView()
+	app.tankard.count = drinkCount
 	return app
 }
 
@@ -166,6 +173,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		inner := session.Msg(msg)
 		a.handleHubMsg(inner)
 		return a, WaitForHubMsg(a.session.Send)
+
+	case tankardTickMsg:
+		var cmd tea.Cmd
+		a.tankard, cmd = a.tankard.Update(msg)
+		return a, cmd
 
 	case CloseModalMsg:
 		a.modal = ModalNone
@@ -310,7 +322,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.modal = ModalPost
 			a.postModal = NewPostModal()
 			return a, nil
+		case "f6":
+			a.tankardFocused = !a.tankardFocused
+			a.tankard.focused = a.tankardFocused
+			return a, nil
 		}
+	}
+
+	// Tankard captures input when focused
+	if a.tankardFocused {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch keyMsg.String() {
+			case "space", " ":
+				cmd := a.tankard.Press()
+				a.store.IncrementDrinkCount(a.session.Fingerprint)
+				return a, cmd
+			case "esc", "f6":
+				a.tankardFocused = false
+				a.tankard.focused = false
+				return a, nil
+			case "ctrl+c":
+				return a, tea.Quit
+			}
+		}
+		return a, nil
 	}
 
 	// Gallery room: single-key shortcuts + mouse
@@ -898,6 +933,7 @@ func (a App) View() tea.View {
 	}
 	sort.Strings(onlineNames)
 	a.online.Users = onlineNames
+	a.online.Tankard = &a.tankard
 	a.rooms.CurrentRoom = a.session.Room
 	var roomInfos []RoomInfo
 	for _, rName := range a.store.AllRooms() {
@@ -919,6 +955,7 @@ func (a App) View() tea.View {
 	a.rooms.MentionCounts = mentionCounts
 
 	a.bottomBar.MentionCount = a.unreadMentionCount("")
+	a.bottomBar.IsTankard = a.tankardFocused
 
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()
