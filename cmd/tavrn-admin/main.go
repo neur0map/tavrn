@@ -182,15 +182,19 @@ func runRemoveRoom(name string) {
 		fmt.Println("Room name cannot be empty.")
 		os.Exit(1)
 	}
-	protected := map[string]bool{"lounge": true, "gallery": true, "games": true}
-	if protected[name] {
-		fmt.Printf("Cannot remove built-in room #%s\n", name)
+	// Protect the landing room
+	firstRoom := "lounge" // fallback
+	if cfg, err := config.Load(resolvedPath("tavern.yaml")); err == nil {
+		firstRoom = cfg.FirstRoom()
+	}
+	if name == firstRoom {
+		fmt.Printf("Cannot remove the landing room #%s\n", name)
 		os.Exit(1)
 	}
 	if err := os.WriteFile(resolvedPath(removeRoomFile), []byte(name), 0600); err != nil {
 		log.Fatalf("failed to write remove file: %v", err)
 	}
-	fmt.Printf("Remove queued: #%s (users will be moved to #lounge)\n", name)
+	fmt.Printf("Remove queued: #%s (users will be moved to #%s)\n", name, firstRoom)
 }
 
 func runBan(nickname string) {
@@ -338,6 +342,7 @@ func runServer() {
 		log.Fatalf("store: %v", err)
 	}
 	defer st.Close()
+	st.SeedRooms(cfg.RoomNames())
 
 	h := hub.New()
 	go h.Run()

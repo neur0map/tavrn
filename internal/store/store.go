@@ -123,14 +123,14 @@ func (s *Store) migrate() error {
 	}
 	// Add embedding column to bartender_memories if missing (migration).
 	s.db.Exec(`ALTER TABLE bartender_memories ADD COLUMN embedding TEXT`)
-	return s.seedRooms()
+	return nil
 }
 
-func (s *Store) seedRooms() error {
-	for _, name := range []string{"lounge", "gallery", "games", "suggestions"} {
+// SeedRooms creates default rooms if they don't exist.
+func (s *Store) SeedRooms(names []string) {
+	for _, name := range names {
 		s.db.Exec(`INSERT OR IGNORE INTO rooms (name) VALUES (?)`, name)
 	}
-	return nil
 }
 
 // AddOwner registers a permanent owner nickname that survives purges.
@@ -481,7 +481,7 @@ func (s *Store) AddRoom(name string) error {
 func (s *Store) AllRooms() []string {
 	rows, err := s.db.Query(`SELECT name FROM rooms ORDER BY created_at ASC`)
 	if err != nil {
-		return []string{"lounge", "gallery", "games", "suggestions"}
+		return nil
 	}
 	defer rows.Close()
 	var rooms []string
@@ -491,9 +491,6 @@ func (s *Store) AllRooms() []string {
 			continue
 		}
 		rooms = append(rooms, name)
-	}
-	if len(rooms) == 0 {
-		return []string{"lounge", "gallery", "games", "suggestions"}
 	}
 	return rooms
 }

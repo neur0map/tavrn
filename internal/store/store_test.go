@@ -12,6 +12,8 @@ func tempStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("New(%q) error: %v", path, err)
 	}
+	// Seed default rooms for tests (config-driven in production)
+	s.SeedRooms([]string{"lounge", "gallery", "games", "suggestions"})
 	t.Cleanup(func() { s.Close() })
 	return s
 }

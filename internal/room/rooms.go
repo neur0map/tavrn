@@ -1,4 +1,8 @@
 package room
 
-// Defaults are the rooms seeded on first run.
-var Defaults = []string{"lounge", "gallery", "games", "suggestions"}
+// ValidTypes are the supported room types.
+var ValidTypes = map[string]bool{
+	"chat":    true,
+	"gallery": true,
+	"games":   true,
+}
