@@ -18,7 +18,7 @@ func extractURLs(text string) []string {
 // renderURLBox renders a URL as a styled box for chat display.
 func renderURLBox(rawURL string) string {
 	border := lipgloss.NewStyle().Foreground(ColorBorder)
-	link := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true)
+	linkStyle := lipgloss.NewStyle().Foreground(ColorHighlight).Bold(true).Underline(true)
 	dim := lipgloss.NewStyle().Foreground(ColorDim)
 
 	// Extract domain for the header
@@ -36,7 +36,7 @@ func renderURLBox(rawURL string) string {
 	var b strings.Builder
 	b.WriteString(border.Render("╭─") + dim.Render(" "+domain+" ") + border.Render("─╮"))
 	b.WriteString("\n")
-	b.WriteString(border.Render("│ ") + link.Render(display) + border.Render(" │"))
+	b.WriteString(border.Render("│ ") + linkStyle.Render(display) + border.Render(" │"))
 	b.WriteString("\n")
 	b.WriteString(border.Render("╰─") + border.Render(strings.Repeat("─", lipgloss.Width(display)+1)) + border.Render("╯"))
 
