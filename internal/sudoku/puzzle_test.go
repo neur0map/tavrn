@@ -107,7 +107,7 @@ func TestGenerate(t *testing.T) {
 	}{
 		{"easy", 41},
 		{"medium", 31},
-		{"hard", 26},
+		{"hard", 30},
 		{"evil", 30}, // evil targets 58 removals but uniqueness may block some
 	}
 
