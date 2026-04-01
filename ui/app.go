@@ -315,6 +315,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if banner := a.store.GetBanner(); banner != "" {
 					a.chat.AddMessage(chat.NewBannerMessage(a.session.Room, banner))
 				}
+				// Restore active poll cards
+				for _, p := range a.pollStore.RoomPolls(a.session.Room) {
+					p := p
+					a.chat.AddMessage(chat.Message{
+						Room:   a.session.Room,
+						Text:   RenderPollCard(&p),
+						IsPoll: true,
+					})
+				}
 				return a, nil
 			case "c":
 				a.modal = ModalChangelog
@@ -997,6 +1006,15 @@ func (a *App) switchRoom(target string) {
 		}
 		a.chat.AddMessage(chat.NewSystemMessage(target,
 			fmt.Sprintf("You joined #%s", target)))
+		// Restore active poll cards
+		for _, p := range a.pollStore.RoomPolls(target) {
+			p := p
+			a.chat.AddMessage(chat.Message{
+				Room:   target,
+				Text:   RenderPollCard(&p),
+				IsPoll: true,
+			})
+		}
 	}
 
 	// Announce join in new room
