@@ -81,10 +81,17 @@ func (ts TavernState) Describe() string {
 	return strings.Join(parts, " ")
 }
 
+// MemoryEntry is a memory with optional embedding.
+type MemoryEntry struct {
+	Text      string
+	Embedding []float32
+}
+
 // MemoryStore is the interface the bartender needs from the store.
 type MemoryStore interface {
-	AddBartenderMemory(text string) error
-	BartenderMemories(limit int) []string
+	AddBartenderMemory(text, embeddingJSON string) error
+	BartenderMemoriesRecent(limit int) []string
+	BartenderAllMemoriesRaw() ([]string, []string) // texts, embeddingJSONs
 	SetBartenderUserNote(fingerprint, note string) error
 	BartenderUserNote(fingerprint string) string
 }
@@ -199,8 +206,8 @@ func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, trigger
 	}
 	chatContext := strings.Join(contextParts, "\n")
 
-	// Long-term memories
-	memories := b.store.BartenderMemories(20)
+	// Long-term memories — semantic search by trigger message
+	memories := b.searchMemories(triggerText, 10)
 	var memoryBlock string
 	if len(memories) > 0 {
 		memoryBlock = "\n\nThings you remember from past shifts:\n- " + strings.Join(memories, "\n- ")
@@ -335,7 +342,12 @@ Rules:
 	if strings.HasPrefix(result, "MEMORY:") {
 		mem := strings.TrimSpace(strings.TrimPrefix(result, "MEMORY:"))
 		if mem != "" {
-			b.store.AddBartenderMemory(mem)
+			emb, err := b.embed(mem)
+			embStr := ""
+			if err == nil {
+				embStr = embedJSON(emb)
+			}
+			b.store.AddBartenderMemory(mem, embStr)
 			log.Printf("bartender: saved memory: %s", mem)
 		}
 	} else if strings.HasPrefix(result, "USER:") {

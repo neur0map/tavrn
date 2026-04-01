@@ -105,6 +105,7 @@ func (s *Store) migrate() error {
 	CREATE TABLE IF NOT EXISTS bartender_memories (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		text       TEXT NOT NULL,
+		embedding  TEXT,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS bartender_user_notes (
@@ -630,19 +631,19 @@ func (s *Store) AllSSHLinks() []string {
 
 // ── Bartender Memory (survives purges) ──
 
-func (s *Store) AddBartenderMemory(text string) error {
+func (s *Store) AddBartenderMemory(text, embeddingJSON string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Cap at 200 memories — delete oldest if over
 	s.db.Exec(`DELETE FROM bartender_memories WHERE id IN (
 		SELECT id FROM bartender_memories ORDER BY created_at ASC
 		LIMIT max(0, (SELECT COUNT(*) FROM bartender_memories) - 199)
 	)`)
-	_, err := s.db.Exec(`INSERT INTO bartender_memories (text) VALUES (?)`, text)
+	_, err := s.db.Exec(`INSERT INTO bartender_memories (text, embedding) VALUES (?, ?)`, text, embeddingJSON)
 	return err
 }
 
-func (s *Store) BartenderMemories(limit int) []string {
+// BartenderMemoriesRecent returns the latest N memories (fallback when no embedding search).
+func (s *Store) BartenderMemoriesRecent(limit int) []string {
 	rows, err := s.db.Query(`SELECT text FROM bartender_memories ORDER BY created_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil
@@ -657,6 +658,25 @@ func (s *Store) BartenderMemories(limit int) []string {
 		mems = append(mems, t)
 	}
 	return mems
+}
+
+// BartenderAllMemoriesRaw returns all memory texts and their embedding JSONs.
+func (s *Store) BartenderAllMemoriesRaw() ([]string, []string) {
+	rows, err := s.db.Query(`SELECT text, COALESCE(embedding, '') FROM bartender_memories ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, nil
+	}
+	defer rows.Close()
+	var texts, embs []string
+	for rows.Next() {
+		var t, e string
+		if err := rows.Scan(&t, &e); err != nil {
+			continue
+		}
+		texts = append(texts, t)
+		embs = append(embs, e)
+	}
+	return texts, embs
 }
 
 func (s *Store) SetBartenderUserNote(fingerprint, note string) error {
