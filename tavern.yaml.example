@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────
+# Tavern Configuration
+# ─────────────────────────────────────────────────
+# Copy this file to tavern.yaml and fill in your values.
+# The app will not start without a valid tavern.yaml.
+#
+# The "tavrn" name is reserved — see TRADEMARK.md.
+# ─────────────────────────────────────────────────
+
+tavern:
+  name: "My Tavern"             # Displayed in topbar, splash screen, window title
+  domain: "mytavern.example"    # Shown in SSH instructions and website
+  tagline: ""                   # Optional — shown on splash screen below the name
+
+owner:
+  name: "yourname"              # Your nickname (reserved, shown with star)
+  fingerprint: "SHA256:..."     # Your SSH public key fingerprint
+                                # Find it: ssh-keygen -lf ~/.ssh/id_ed25519.pub
+
+rooms:
+  - name: "lounge"              # First room is the default landing room
+    type: chat                  # Regular chat room
+  - name: "gallery"
+    type: gallery               # Sticky-note canvas
+  - name: "games"
+    type: games                 # Sudoku and other games
+  - name: "suggestions"
+    type: chat
