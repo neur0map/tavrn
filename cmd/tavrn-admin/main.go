@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/template"
 	"time"
 
 	"tavrn.sh/internal/bartender"
@@ -382,12 +383,31 @@ func runServer() {
 	var bt *bartender.Bartender
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey != "" {
-		soul, err := os.ReadFile("bartender/soul.md")
+		soulRaw, err := os.ReadFile(resolvedPath("bartender/soul.md"))
 		if err != nil {
-			log.Printf("bartender: soul.md not found, using default")
-			soul = []byte("You are a gruff bartender in a terminal tavern. Keep replies to 1-2 sentences.")
+			log.Printf("bartender: soul.md not found, trying soul.md.example")
+			soulRaw, err = os.ReadFile(resolvedPath("bartender/soul.md.example"))
+			if err != nil {
+				log.Printf("bartender: no soul file found, using default")
+				soulRaw = []byte("You are a gruff bartender in a terminal tavern. Keep replies to 1-2 sentences.")
+			}
 		}
-		bt = bartender.New(apiKey, string(soul), st)
+
+		soul := string(soulRaw)
+		// Render template variables if present
+		if tmpl, tmplErr := template.New("soul").Parse(soul); tmplErr == nil {
+			var buf bytes.Buffer
+			data := map[string]string{
+				"TavernName": cfg.Tavern.Name,
+				"OwnerName":  cfg.Owner.Name,
+				"Domain":     cfg.Tavern.Domain,
+			}
+			if err := tmpl.Execute(&buf, data); err == nil {
+				soul = buf.String()
+			}
+		}
+
+		bt = bartender.New(apiKey, soul, st)
 		log.Println("bartender: enabled")
 	} else {
 		log.Println("bartender: disabled (no OPENAI_API_KEY)")
