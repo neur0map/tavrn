@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tavrn.sh/internal/bartender"
+	"tavrn.sh/internal/config"
 	"tavrn.sh/internal/hub"
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/poll"
@@ -309,6 +310,27 @@ func runServer() {
 		log.SetOutput(logFile)
 		defer logFile.Close()
 	}
+
+	// Load tavern config — required for startup
+	configPath := resolvedPath("tavern.yaml")
+	if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+		fmt.Fprintln(os.Stderr, "ERROR: tavern.yaml not found.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "This is the tavern engine — you need to configure your own tavern.")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "  cp tavern.yaml.example tavern.yaml")
+		fmt.Fprintln(os.Stderr, "  # edit tavern.yaml with your tavern name, domain, and SSH fingerprint")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "To find your SSH key fingerprint:")
+		fmt.Fprintln(os.Stderr, "  ssh-keygen -lf ~/.ssh/id_ed25519.pub")
+		os.Exit(1)
+	}
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	_ = cfg // used in later tasks
 
 	st, err := store.New(resolvedDBPath())
 	if err != nil {
