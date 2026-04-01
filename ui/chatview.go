@@ -234,6 +234,11 @@ func (c *ChatView) renderMessages() {
 			body := "      " + ml
 			lines = append(lines, body)
 		}
+
+		// URL boxes — rendered below the message text
+		if urlBoxes := renderTextWithURLs(msg.Text, c.viewport.Width()-8); len(urlBoxes) > 0 {
+			lines = append(lines, urlBoxes...)
+		}
 	}
 	c.viewport.SetContent(strings.Join(lines, "\n"))
 }
