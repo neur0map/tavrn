@@ -17,7 +17,7 @@ const (
 	apiURL          = "https://api.openai.com/v1/chat/completions"
 	chatModel       = "gpt-5-mini-2025-08-07"
 	memoryModel     = "gpt-4.1-nano"
-	maxTokens       = 500 // includes hidden reasoning tokens (~300) + response (~150)
+	maxTokens       = 1024 // includes hidden reasoning tokens + response
 	memoryMaxTokens = 100
 	cooldownPerUser = 10 * time.Second
 )
@@ -417,7 +417,7 @@ func (b *Bartender) callAPI(model string, messages []apiMessage, tokens int) (st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+b.apiKey)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("api call: %w", err)

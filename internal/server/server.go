@@ -203,6 +203,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 					reply, err := s.cfg.Bartender.Respond(gatherContext(), tavernState(), msg.Fingerprint, msg.Nickname, msg.Text)
 					if err != nil {
 						log.Printf("bartender error: %v", err)
+						broadcastBartender("Wipes the glass and says nothing.")
 						return
 					}
 					broadcastBartender(reply)
