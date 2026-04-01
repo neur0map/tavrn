@@ -142,6 +142,16 @@ func (s *Store) AddOwner(fingerprint, nickname string) error {
 	return err
 }
 
+// IsOwner checks if a fingerprint is in the owners table.
+func (s *Store) IsOwner(fingerprint string) bool {
+	row := s.db.QueryRow(`SELECT COUNT(*) FROM owners WHERE fingerprint = ?`, fingerprint)
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
+}
+
 // restoreOwners re-creates owner user rows after a purge.
 func (s *Store) restoreOwners() {
 	rows, err := s.db.Query(`SELECT fingerprint, nickname FROM owners`)

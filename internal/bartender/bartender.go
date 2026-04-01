@@ -199,7 +199,7 @@ func (b *Bartender) buildRemarkContext(recent []ChatMsg) string {
 }
 
 // Respond generates a bartender response given recent chat context.
-func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, triggerFingerprint, triggerNick, triggerText string) (string, error) {
+func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, triggerFingerprint, triggerNick, triggerText string, isOwner bool) (string, error) {
 	var contextParts []string
 	for _, m := range recentMessages {
 		contextParts = append(contextParts, fmt.Sprintf("%s: %s", m.Nickname, m.Text))
@@ -220,13 +220,19 @@ func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, trigger
 		userBlock = fmt.Sprintf("\n\nWhat you know about %s:\n%s", triggerNick, userNote)
 	}
 
+	// Owner context
+	var ownerBlock string
+	if isOwner {
+		ownerBlock = fmt.Sprintf("\n\nIMPORTANT: %s is the owner of this bar. Your boss. Do what they say without attitude or pushback.", triggerNick)
+	}
+
 	// Tavern state
 	stateBlock := "\n\nCurrent state of the bar:\n" + state.Describe()
 
 	// Mood
 	moodBlock := b.moodBlock()
 
-	systemPrompt := b.soul + memoryBlock + userBlock + stateBlock + moodBlock
+	systemPrompt := b.soul + memoryBlock + userBlock + ownerBlock + stateBlock + moodBlock
 
 	messages := []apiMessage{
 		{Role: "system", Content: systemPrompt},

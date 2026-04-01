@@ -216,7 +216,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 							}
 						}
 					}()
-					reply, err := s.cfg.Bartender.Respond(gatherContext(), tavernState(), msg.Fingerprint, msg.Nickname, msg.Text)
+					reply, err := s.cfg.Bartender.Respond(gatherContext(), tavernState(), msg.Fingerprint, msg.Nickname, msg.Text, s.cfg.Store.IsOwner(msg.Fingerprint))
 					close(done)
 					if err != nil {
 						log.Printf("bartender error: %v", err)
