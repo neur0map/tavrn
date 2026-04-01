@@ -97,12 +97,12 @@ func (r RoomsPanel) View() string {
 		b.WriteString(header.Render("OTHER SSH"))
 		b.WriteString("\n")
 
-		maxW := r.Width - 5
-		if maxW < 8 {
-			maxW = 8
+		maxW := r.Width - 4
+		if maxW < 10 {
+			maxW = 10
 		}
 		for _, addr := range r.SSHLinks {
-			b.WriteString(" " + addrStyle.Render(truncateWidth(addr, maxW)) + "\n")
+			b.WriteString(addrStyle.Render(truncateWidth(addr, maxW)) + "\n")
 		}
 	}
 
