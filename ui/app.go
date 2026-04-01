@@ -676,6 +676,38 @@ func (a *App) handleCommand(parsed chat.ParseResult) {
 			Fingerprint: a.session.Fingerprint,
 			PollID:      p.ID,
 		})
+	case "addssh":
+		if !identity.IsOwner(a.session.Nickname) {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Only the tavern owner can do that."))
+			return
+		}
+		addr := strings.TrimSpace(parsed.Args)
+		if addr == "" {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Usage: /addssh <address>"))
+			return
+		}
+		if err := a.store.AddSSHLink(addr); err != nil {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Failed to add SSH link."))
+			return
+		}
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+			fmt.Sprintf("Added: %s", addr)))
+	case "rmssh":
+		if !identity.IsOwner(a.session.Nickname) {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Only the tavern owner can do that."))
+			return
+		}
+		addr := strings.TrimSpace(parsed.Args)
+		if addr == "" {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Usage: /rmssh <address>"))
+			return
+		}
+		if err := a.store.RemoveSSHLink(addr); err != nil {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Failed to remove SSH link."))
+			return
+		}
+		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+			fmt.Sprintf("Removed: %s", addr)))
 	default:
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use F1 for help with keybinds."))
 	}
@@ -1070,6 +1102,9 @@ func (a App) View() tea.View {
 	}
 	a.rooms.Rooms = roomInfos
 	a.rooms.ActivityCounts = a.store.RecentActivityCounts(10)
+
+	// SSH links for sidebar
+	a.rooms.SSHLinks = a.store.AllSSHLinks()
 
 	// Build mention counts for room badges
 	mentionCounts := make(map[string]int)

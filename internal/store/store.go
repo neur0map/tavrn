@@ -102,6 +102,10 @@ func (s *Store) migrate() error {
 		fingerprint TEXT PRIMARY KEY,
 		count       INTEGER NOT NULL DEFAULT 0
 	);
+	CREATE TABLE IF NOT EXISTS ssh_links (
+		id      INTEGER PRIMARY KEY AUTOINCREMENT,
+		address TEXT NOT NULL UNIQUE
+	);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -442,13 +446,6 @@ func (s *Store) AllNotes() ([]NoteRow, error) {
 	return notes, nil
 }
 
-func (s *Store) ClearGallery() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, err := s.db.Exec(`DELETE FROM gallery_notes`)
-	return err
-}
-
 // ── Rooms ──
 
 func (s *Store) AddRoom(name string) error {
@@ -585,4 +582,38 @@ func (s *Store) IncrementDrinkCount(fingerprint string) (int, error) {
 	var count int
 	err = row.Scan(&count)
 	return count, err
+}
+
+// ── SSH Links (survives purges) ──
+
+func (s *Store) AddSSHLink(address string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`INSERT INTO ssh_links (address) VALUES (?)
+		ON CONFLICT DO NOTHING`, address)
+	return err
+}
+
+func (s *Store) RemoveSSHLink(address string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`DELETE FROM ssh_links WHERE address = ?`, address)
+	return err
+}
+
+func (s *Store) AllSSHLinks() []string {
+	rows, err := s.db.Query(`SELECT address FROM ssh_links ORDER BY id ASC`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var links []string
+	for rows.Next() {
+		var addr string
+		if err := rows.Scan(&addr); err != nil {
+			continue
+		}
+		links = append(links, addr)
+	}
+	return links
 }

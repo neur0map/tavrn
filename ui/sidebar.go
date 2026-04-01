@@ -23,6 +23,7 @@ type RoomsPanel struct {
 	Height         int
 	MentionCounts  map[string]int // room name → unread mention count
 	ActivityCounts map[string]int // room name → messages in last 10min
+	SSHLinks       []string
 }
 
 func NewRoomsPanel() RoomsPanel {
@@ -82,6 +83,26 @@ func (r RoomsPanel) View() string {
 			roomName := lipgloss.NewStyle().Foreground(ColorSand).Render(name)
 			roomCount := lipgloss.NewStyle().Foreground(ColorDimmer).Render(countStr)
 			b.WriteString(" " + roomName + padding + roomCount + badgeStr + "\n")
+		}
+	}
+
+	// ── Other SSH section ──
+	if len(r.SSHLinks) > 0 {
+		dimmer := lipgloss.NewStyle().Foreground(ColorDimmer)
+		addrStyle := lipgloss.NewStyle().Foreground(ColorAccent)
+
+		b.WriteString("\n")
+		b.WriteString(dimmer.Render(strings.Repeat("─", r.Width-4)))
+		b.WriteString("\n")
+		b.WriteString(header.Render("OTHER SSH"))
+		b.WriteString("\n")
+
+		maxW := r.Width - 5
+		if maxW < 8 {
+			maxW = 8
+		}
+		for _, addr := range r.SSHLinks {
+			b.WriteString(" " + addrStyle.Render(truncateWidth(addr, maxW)) + "\n")
 		}
 	}
 

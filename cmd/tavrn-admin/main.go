@@ -368,7 +368,7 @@ func runServer() {
 	defer cancel()
 
 	go startPurgeScheduler(st, h, pollStore)
-	go startGalleryCleanup(st, h)
+	// Gallery notes now persist until weekly purge — no hourly cleanup.
 	go watchBannerFile(st, h)
 	go watchAddRoomFile(st, h)
 	go watchRenameRoomFile(st, h)
@@ -587,24 +587,6 @@ func startPurgeScheduler(st *store.Store, h *hub.Hub, ps *poll.Store) {
 		st.PurgeAll()
 		ps.Clear()
 		log.Println("Weekly purge complete")
-	}
-}
-
-func startGalleryCleanup(st *store.Store, h *hub.Hub) {
-	for {
-		now := time.Now().UTC()
-		next := now.Truncate(time.Hour).Add(time.Hour)
-		timer := time.NewTimer(time.Until(next))
-		<-timer.C
-
-		log.Println("Gallery cleanup starting...")
-		st.ClearGallery()
-		h.Broadcast("gallery", session.Msg{
-			Type: session.MsgSystem,
-			Text: "The gallery board has been wiped clean.",
-			Room: "gallery",
-		})
-		log.Println("Gallery cleanup complete")
 	}
 }
 
