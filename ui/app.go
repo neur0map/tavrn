@@ -1111,7 +1111,7 @@ func (a App) View() tea.View {
 		onlineNames = append(onlineNames, name)
 	}
 	if a.session.Room == "lounge" {
-		onlineNames = append(onlineNames, "bartender")
+		onlineNames = append(onlineNames, "◆ bartender")
 	}
 	sort.Strings(onlineNames)
 	a.online.Users = onlineNames
