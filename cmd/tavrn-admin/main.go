@@ -133,8 +133,8 @@ func main() {
 			fmt.Println("  tavrn --ban-list                 Show all active bans")
 			fmt.Println("  tavrn --bartender-off            Disable bartender (live)")
 			fmt.Println("  tavrn --bartender-on             Enable bartender (live)")
-			fmt.Println("  tavrn --set-flag wg level flag   Set a wargame flag (hashed)")
-			fmt.Println("  tavrn --list-flags wargame       List levels with flags")
+			fmt.Println("  tavrn --set-flag bandit 1 \"flag\" Set a wargame flag (bandit/natas/leviathan)")
+			fmt.Println("  tavrn --list-flags bandit         List levels with flags for a wargame")
 			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
 			fmt.Println("  tavrn --web-audio                Start with web audio streaming on :8090")
 			return
