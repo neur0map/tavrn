@@ -31,6 +31,7 @@ const (
 	ModalGif
 	ModalSubmitFlag
 	ModalLeaderboard
+	ModalWargameRules
 )
 
 // CloseModalMsg signals modal should close.

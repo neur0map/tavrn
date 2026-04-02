@@ -120,12 +120,19 @@ func (r RoomsPanel) View() string {
 
 const maxVisibleUsers = 5
 
+type LeaderboardMini struct {
+	Name   string
+	Level  int
+	Points int
+}
+
 type OnlinePanel struct {
-	Users   []string
-	Width   int
-	Height  int
-	Frame   int // for animated online dots
-	Tankard *TankardView
+	Users       []string
+	Width       int
+	Height      int
+	Frame       int // for animated online dots
+	Tankard     *TankardView
+	Leaderboard []LeaderboardMini
 }
 
 func NewOnlinePanel() OnlinePanel {
@@ -179,6 +186,37 @@ func (o OnlinePanel) View() string {
 	b.WriteString(dimmer.Render(strings.Repeat("─", o.Width-4)))
 	b.WriteString("\n")
 	b.WriteString(renderWorldClock(o.Width - 4))
+
+	// Mini leaderboard
+	if len(o.Leaderboard) > 0 {
+		accent := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+		amber := lipgloss.NewStyle().Foreground(ColorAmber)
+
+		b.WriteString(dimmer.Render(strings.Repeat("─", o.Width-4)))
+		b.WriteString("\n")
+		b.WriteString(accent.Render("HACKERS"))
+		b.WriteString("\n")
+
+		maxW := o.Width - 6
+		for i, e := range o.Leaderboard {
+			if i >= 3 {
+				break
+			}
+			rank := fmt.Sprintf("#%d", i+1)
+			name := e.Name
+			if len(name) > maxW-12 {
+				name = name[:maxW-15] + "..."
+			}
+			pts := fmt.Sprintf("%d", e.Points)
+
+			if i == 0 {
+				b.WriteString(amber.Render(rank+" "+name) + dim.Render(" "+pts))
+			} else {
+				b.WriteString(dim.Render(rank+" "+name) + dimmer.Render(" "+pts))
+			}
+			b.WriteString("\n")
+		}
+	}
 
 	usersContent := b.String()
 

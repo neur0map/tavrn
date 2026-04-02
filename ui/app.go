@@ -81,9 +81,11 @@ type App struct {
 	gifClient *gif.KlipyClient
 
 	// Wargame CTF
-	wargameStore     *wargame.Store
-	submitModal      SubmitModal
-	leaderboardModal LeaderboardModal
+	wargameStore      *wargame.Store
+	submitModal       SubmitModal
+	leaderboardModal  LeaderboardModal
+	wargameRulesModal WargameRulesModal
+	seenWargameRooms  map[string]bool
 
 	// Mentions
 	mentions []mention.Mention
@@ -150,6 +152,7 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		roomTypes:        roomTypes,
 		gifClient:        gifClient,
 		wargameStore:     ws,
+		seenWargameRooms: make(map[string]bool),
 	}
 	app.chat.SetOwnNickname(sess.Nickname)
 	app.chat.OwnerName = ownerName
@@ -709,6 +712,10 @@ func (a App) updateModal(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.leaderboardModal, cmd = a.leaderboardModal.Update(msg)
 		return a, cmd
+	case ModalWargameRules:
+		var cmd tea.Cmd
+		a.wargameRulesModal, cmd = a.wargameRulesModal.Update(msg)
+		return a, cmd
 	}
 	return a, nil
 }
@@ -1227,6 +1234,13 @@ func (a *App) switchRoom(target string) {
 
 	// Update top bar
 	a.topBar.Room = target
+
+	// Show wargame rules on first visit
+	if a.roomTypes[target] == "wargame" && !a.seenWargameRooms[target] {
+		a.seenWargameRooms[target] = true
+		a.modal = ModalWargameRules
+		a.wargameRulesModal = NewWargameRulesModal(target)
+	}
 }
 
 func (a *App) doLayout() {
@@ -1320,6 +1334,18 @@ func (a App) View() tea.View {
 	sort.Strings(onlineNames)
 	a.online.Users = onlineNames
 	a.online.Tankard = &a.tankard
+	if a.wargameStore != nil {
+		entries := a.wargameStore.Leaderboard(3)
+		var mini []LeaderboardMini
+		for _, e := range entries {
+			mini = append(mini, LeaderboardMini{
+				Name:   e.Nickname,
+				Level:  e.TotalLevel,
+				Points: e.TotalPoints,
+			})
+		}
+		a.online.Leaderboard = mini
+	}
 	a.rooms.CurrentRoom = a.session.Room
 	var roomInfos []RoomInfo
 	for _, rName := range a.store.AllRooms() {
@@ -1415,6 +1441,8 @@ func (a App) View() tea.View {
 			modalBox = a.submitModal.View(a.width, a.height)
 		case ModalLeaderboard:
 			modalBox = a.leaderboardModal.View(a.width, a.height)
+		case ModalWargameRules:
+			modalBox = a.wargameRulesModal.View(a.width, a.height)
 		}
 		base = Overlay(base, modalBox, a.width, a.height)
 	}
