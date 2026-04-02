@@ -149,7 +149,7 @@ func (l LeaderboardModal) View(width, height int) string {
 			}
 			bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
 
-			b.WriteString(fmt.Sprintf("  %-*s ", nameW, dim.Render(name)))
+			fmt.Fprintf(&b, "  %-*s ", nameW, dim.Render(name))
 			b.WriteString(dimmer.Render(fmt.Sprintf("%-5s ", levelStr)))
 			if p.Level > 0 {
 				b.WriteString(green.Render(bar))
