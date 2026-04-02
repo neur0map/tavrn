@@ -33,6 +33,7 @@ var validRoomTypes = map[string]bool{
 	"chat":    true,
 	"gallery": true,
 	"games":   true,
+	"wargame": true,
 }
 
 func Load(path string) (*Config, error) {
