@@ -178,38 +178,32 @@ func (s *Searcher) searchDDG(query string) ([]Result, error) {
 	return results, nil
 }
 
-// NeedsSearch checks if a message looks like a knowledge question.
+// NeedsSearch returns true unless the message is obviously just banter.
+// Search by default — only skip for short greetings and reactions.
 func NeedsSearch(text string) bool {
 	lower := strings.ToLower(text)
-	// Normalize curly quotes to straight
-	lower = strings.ReplaceAll(lower, "\u2018", "'")
-	lower = strings.ReplaceAll(lower, "\u2019", "'")
-	// Remove the @bartender prefix
 	lower = strings.TrimPrefix(lower, "@bartender")
 	lower = strings.TrimSpace(lower)
 
-	triggers := []string{
-		"what is", "what are", "what's", "whats", "what the",
-		"how do", "how does", "how to", "how is",
-		"why do", "why does", "why is",
-		"explain", "define", "meaning of",
-		"who is", "who was", "who are",
-		"when did", "when was", "when is",
-		"where is", "where did",
-		"tell me about", "search for", "look up", "google",
-		"search", "weather", "news", "latest", "current",
-		"can you find", "do you know",
+	// Too short to be a real question
+	if len(lower) < 4 {
+		return false
 	}
-	for _, t := range triggers {
-		if strings.Contains(lower, t) {
-			return true
+
+	// Skip obvious banter / greetings / reactions
+	skipExact := []string{
+		"hey", "hi", "hello", "sup", "yo", "thanks", "thx",
+		"thank you", "lol", "lmao", "haha", "nice", "cool",
+		"cheers", "bye", "later", "good night", "gn",
+		"bruh", "bro", "dude", "man",
+	}
+	for _, s := range skipExact {
+		if lower == s {
+			return false
 		}
 	}
-	// Also trigger on questions (ends with ?)
-	if strings.HasSuffix(strings.TrimSpace(lower), "?") {
-		return true
-	}
-	return false
+
+	return true
 }
 
 // FormatForLLM formats search results into context for the bartender.

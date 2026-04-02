@@ -9,19 +9,17 @@ func TestNeedsSearch(t *testing.T) {
 	}{
 		{"@bartender what is a reverse shell", true},
 		{"@bartender how does SSH work", true},
-		{"@bartender explain buffer overflow", true},
-		{"@bartender who is linus torvalds", true},
-		{"@bartender tell me about nmap", true},
-		{"@bartender search for SQL injection", true},
 		{"@bartender weather in new york", true},
-		{"@bartender current news", true},
+		{"@bartender best linux distro for servers", true},
+		{"@bartender nmap cheat sheet", true},
 		{"@bartender is rust faster than go?", true},
 		{"@bartender hey", false},
 		{"@bartender sup", false},
 		{"@bartender lol", false},
 		{"@bartender thanks", false},
-		{"@bartender whats a CVE", true},
-		{"@bartender look up XSS attacks", true},
+		{"@bartender hi", false},
+		{"@bartender yo", false},
+		{"@bartender cheers", false},
 	}
 	for _, tt := range tests {
 		got := NeedsSearch(tt.text)
