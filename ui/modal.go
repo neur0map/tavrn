@@ -97,6 +97,7 @@ func (h HelpModal) View(width, height int) string {
 		{"/poll", "create a poll"},
 		{"/vote", "vote on active polls"},
 		{"/endpoll", "close your poll"},
+		{"/gif <search>", "search and send animated GIFs"},
 	}
 	for _, c := range cmds {
 		fmt.Fprintf(&b, "  %s  %s\n", cmd.Width(18).Render(c.k), desc.Render(c.d))
