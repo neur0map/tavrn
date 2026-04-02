@@ -344,11 +344,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Room:       a.session.Room,
 			Nickname:   a.session.Nickname,
 			ColorIndex: a.session.ColorIndex,
-			Text:       fmt.Sprintf("/gif %s", msg.Title),
+			Text:       msg.Title,
 			IsGif:      true,
 			GifFrames:  chatFrames,
 			GifDelays:  msg.Delays,
 			GifTitle:   msg.Title,
+			GifURL:     msg.URL,
 			Timestamp:  time.Now(),
 		})
 		a.onSend(session.Msg{
@@ -357,9 +358,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Nickname:    a.session.Nickname,
 			Fingerprint: a.session.Fingerprint,
 			ColorIndex:  a.session.ColorIndex,
+			Text:        msg.Title,
 			GifFrames:   chatFrames,
 			GifDelays:   msg.Delays,
 			GifTitle:    msg.Title,
+			GifURL:      msg.URL,
 		})
 		return a, nil
 	}
@@ -926,19 +929,22 @@ func (a *App) handleHubMsg(msg session.Msg) {
 			a.pollVoteOverlay.SetPolls(polls)
 		}
 	case session.MsgGif:
-		if msg.Fingerprint != a.session.Fingerprint {
-			a.chat.AddMessage(chat.Message{
-				Room:       msg.Room,
-				Nickname:   msg.Nickname,
-				ColorIndex: msg.ColorIndex,
-				Text:       fmt.Sprintf("/gif %s", msg.GifTitle),
-				IsGif:      true,
-				GifFrames:  msg.GifFrames,
-				GifDelays:  msg.GifDelays,
-				GifTitle:   msg.GifTitle,
-				Timestamp:  msg.Timestamp,
-			})
+		// Skip if we just sent this ourselves (live send already added it)
+		if msg.Fingerprint == a.session.Fingerprint && msg.Timestamp.IsZero() {
+			break
 		}
+		a.chat.AddMessage(chat.Message{
+			Room:       msg.Room,
+			Nickname:   msg.Nickname,
+			ColorIndex: msg.ColorIndex,
+			Text:       msg.GifTitle,
+			IsGif:      true,
+			GifFrames:  msg.GifFrames,
+			GifDelays:  msg.GifDelays,
+			GifTitle:   msg.GifTitle,
+			GifURL:     msg.GifURL,
+			Timestamp:  msg.Timestamp,
+		})
 	}
 }
 

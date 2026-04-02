@@ -135,7 +135,61 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 
 	// Send recent chat history
 	history, _ := s.cfg.Store.RecentMessages(firstRoom, 50)
-	for _, m := range history {
+
+	// Collect GIF URLs from history to re-render (max 10)
+	type gifHistoryItem struct {
+		index int
+		url   string
+	}
+	var gifItems []gifHistoryItem
+	for i, m := range history {
+		if m.GifURL != "" && len(gifItems) < 10 {
+			gifItems = append(gifItems, gifHistoryItem{index: i, url: m.GifURL})
+		}
+	}
+
+	// Pre-render GIF frames for history (background-friendly)
+	gifFrameCache := make(map[int]struct {
+		frames []string
+		delays []int
+	})
+	if s.cfg.GifClient != nil {
+		for _, gi := range gifItems {
+			data, err := s.cfg.GifClient.FetchGIF(gi.url)
+			if err != nil {
+				continue
+			}
+			decoded, err := gif.Decode(data)
+			if err != nil {
+				continue
+			}
+			frames := gif.RenderFrames(decoded.Frames, 60)
+			gifFrameCache[gi.index] = struct {
+				frames []string
+				delays []int
+			}{frames: frames, delays: decoded.Delays}
+		}
+	}
+
+	for i, m := range history {
+		if m.GifURL != "" {
+			if cached, ok := gifFrameCache[i]; ok {
+				sess.Send <- session.Msg{
+					Type:        session.MsgGif,
+					Nickname:    m.Nickname,
+					Fingerprint: m.Fingerprint,
+					ColorIndex:  m.ColorIndex,
+					Text:        m.Text,
+					Room:        m.Room,
+					Timestamp:   m.CreatedAt,
+					GifFrames:   cached.frames,
+					GifDelays:   cached.delays,
+					GifTitle:    m.Text,
+					GifURL:      m.GifURL,
+				}
+				continue
+			}
+		}
 		msgType := session.MsgChat
 		if m.IsSystem {
 			msgType = session.MsgSystem
@@ -195,6 +249,8 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		switch msg.Type {
 		case session.MsgChat:
 			s.cfg.Store.SaveMessage(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false)
+		case session.MsgGif:
+			s.cfg.Store.SaveMessageWithGif(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false, msg.GifURL)
 		case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
 			s.cfg.Store.SaveMessage(msg.Room, "", "", 0, msg.Text, true)
 		}

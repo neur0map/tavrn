@@ -17,6 +17,7 @@ type GifSendMsg struct {
 	Frames []string
 	Delays []int
 	Title  string
+	URL    string
 }
 
 // GifSearchResultMsg delivers search results from the background search.
@@ -136,10 +137,15 @@ func (g GifModal) Update(msg tea.Msg) (GifModal, tea.Cmd) {
 					title = g.results[g.cursor].Title
 				}
 				return g, func() tea.Msg {
+					gifURL := ""
+					if g.cursor < len(g.results) {
+						gifURL = g.results[g.cursor].URL
+					}
 					return GifSendMsg{
 						Frames: g.frames,
 						Delays: g.delays,
 						Title:  title,
+						URL:    gifURL,
 					}
 				}
 			}

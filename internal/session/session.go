@@ -62,6 +62,7 @@ type Msg struct {
 	GifFrames   []string // pre-rendered half-block frames
 	GifDelays   []int    // frame delays in milliseconds
 	GifTitle    string   // GIF title for display
+	GifURL      string   // source URL for persistence
 }
 
 // Session represents a connected user.

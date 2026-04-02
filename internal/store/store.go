@@ -121,6 +121,8 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
+	// Add gif_url column to chat_messages if missing (migration).
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN gif_url TEXT DEFAULT ''`)
 	// Add embedding column to bartender_memories if missing (migration).
 	s.db.Exec(`ALTER TABLE bartender_memories ADD COLUMN embedding TEXT`)
 	return nil
@@ -330,10 +332,15 @@ type ChatRow struct {
 	ColorIndex  int
 	Text        string
 	IsSystem    bool
+	GifURL      string
 	CreatedAt   time.Time
 }
 
 func (s *Store) SaveMessage(room, fingerprint, nickname string, colorIndex int, text string, isSystem bool) error {
+	return s.SaveMessageWithGif(room, fingerprint, nickname, colorIndex, text, isSystem, "")
+}
+
+func (s *Store) SaveMessageWithGif(room, fingerprint, nickname string, colorIndex int, text string, isSystem bool, gifURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sys := 0
@@ -341,15 +348,15 @@ func (s *Store) SaveMessage(room, fingerprint, nickname string, colorIndex int, 
 		sys = 1
 	}
 	_, err := s.db.Exec(`
-		INSERT INTO chat_messages (room, fingerprint, nickname, color_index, text, is_system)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, room, fingerprint, nickname, colorIndex, text, sys)
+		INSERT INTO chat_messages (room, fingerprint, nickname, color_index, text, is_system, gif_url)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, room, fingerprint, nickname, colorIndex, text, sys, gifURL)
 	return err
 }
 
 func (s *Store) RecentMessages(room string, limit int) ([]ChatRow, error) {
 	rows, err := s.db.Query(`
-		SELECT room, fingerprint, nickname, color_index, text, is_system, created_at
+		SELECT room, fingerprint, nickname, color_index, text, is_system, COALESCE(gif_url, ''), created_at
 		FROM chat_messages
 		WHERE room = ?
 		ORDER BY created_at DESC
@@ -365,7 +372,7 @@ func (s *Store) RecentMessages(room string, limit int) ([]ChatRow, error) {
 		var m ChatRow
 		var sys int
 		var ts string
-		if err := rows.Scan(&m.Room, &m.Fingerprint, &m.Nickname, &m.ColorIndex, &m.Text, &sys, &ts); err != nil {
+		if err := rows.Scan(&m.Room, &m.Fingerprint, &m.Nickname, &m.ColorIndex, &m.Text, &sys, &m.GifURL, &ts); err != nil {
 			continue
 		}
 		m.IsSystem = sys != 0

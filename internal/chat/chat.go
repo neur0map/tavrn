@@ -20,6 +20,7 @@ type Message struct {
 	GifFrames   []string // pre-rendered half-block frames
 	GifDelays   []int    // frame delays in milliseconds
 	GifTitle    string
+	GifURL      string
 	GifFrame    int // current animation frame index
 	GifLastTick time.Time
 }
