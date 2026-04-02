@@ -226,15 +226,18 @@ func (o OnlinePanel) View() string {
 		b.WriteString(accent.Render("HACKERS"))
 		b.WriteString("\n")
 
-		maxW := o.Width - 6
+		maxNameW := o.Width - 14
+		if maxNameW < 4 {
+			maxNameW = 4
+		}
 		for i, e := range o.Leaderboard {
 			if i >= 3 {
 				break
 			}
 			rank := fmt.Sprintf("#%d", i+1)
 			name := e.Name
-			if len(name) > maxW-12 {
-				name = name[:maxW-15] + "..."
+			if len(name) > maxNameW {
+				name = name[:maxNameW-1] + "."
 			}
 			pts := fmt.Sprintf("%d", e.Points)
 
