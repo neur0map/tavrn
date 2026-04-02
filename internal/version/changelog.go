@@ -21,6 +21,8 @@ var Changelog = []Entry{
 			"help modal updated with all keybinds and commands",
 			"URLs render as styled boxes in chat",
 			"text selection works outside gallery",
+			"/gif search — animated GIFs in chat via Klipy API",
+			"fork-friendly — tavern.yaml config, Docker support, MIT license",
 		},
 	},
 	{
