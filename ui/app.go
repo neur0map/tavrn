@@ -1363,10 +1363,10 @@ func (a App) View() tea.View {
 		} else if s.Flair {
 			name = "~" + name
 		}
-		// Append wargame level badge
+		// Append wargame level badge (compact)
 		if a.wargameStore != nil {
 			if lvl := a.wargameStore.UserTotalLevel(s.Fingerprint); lvl > 0 {
-				name = fmt.Sprintf("%s [Lv.%d]", name, lvl)
+				name = fmt.Sprintf("%s %d", name, lvl)
 			}
 		}
 		onlineNames = append(onlineNames, name)
