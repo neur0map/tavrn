@@ -220,28 +220,11 @@ func (o OnlinePanel) View() string {
 
 	usersContent := b.String()
 
-	// Render tankard below users if there's room
+	// Render tankard below everything
 	if o.Tankard != nil && o.Height >= 20 {
 		tankardArt := o.Tankard.View()
 		tankardSep := dimmer.Render(strings.Repeat("─", o.Width-4))
-
-		// Calculate padding to push tankard to bottom
-		// Inner height = Height - border(0) - paddingTop(1)
-		innerH := o.Height - 1
-		usersLines := strings.Count(usersContent, "\n") + 1
-		tankardLines := strings.Count(tankardArt, "\n") + 1
-		sepLine := 1
-		gap := innerH - usersLines - tankardLines - sepLine
-		if gap < 0 {
-			gap = 0
-		}
-
-		full := usersContent + strings.Repeat("\n", gap) + tankardSep + "\n" + tankardArt
-		return RightSidebarStyle.
-			Width(o.Width).
-			Height(o.Height).
-			MaxHeight(o.Height).
-			Render(full)
+		usersContent += "\n" + tankardSep + "\n" + tankardArt
 	}
 
 	return RightSidebarStyle.

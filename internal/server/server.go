@@ -168,7 +168,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 				log.Printf("gif history: decode failed: %v", err)
 				continue
 			}
-			frames := gif.RenderFrames(decoded.Frames, 40)
+			frames := gif.RenderFrames(decoded.Frames, 50)
 			gifFrameCache[gi.index] = struct {
 				frames []string
 				delays []int

@@ -53,6 +53,7 @@ type App struct {
 	online         OnlinePanel
 	width          int
 	height         int
+	chatWidth      int
 	store          *store.Store
 	hub            *hub.Hub
 	onSend         func(session.Msg)
@@ -1184,7 +1185,14 @@ func (a *App) switchRoom(target string) {
 				if err == nil {
 					decoded, decErr := gif.Decode(data)
 					if decErr == nil {
-						frames := gif.RenderFrames(decoded.Frames, gifModalRenderWidth)
+						gifW := a.chatWidth - 10
+						if gifW < 20 {
+							gifW = 20
+						}
+						if gifW > 60 {
+							gifW = 60
+						}
+						frames := gif.RenderFrames(decoded.Frames, gifW)
 						a.chat.AddMessage(chat.Message{
 							Nickname:   m.Nickname,
 							ColorIndex: m.ColorIndex,
@@ -1263,6 +1271,7 @@ func (a *App) doLayout() {
 		onlineWidth = 0
 		chatWidth = a.width
 	}
+	a.chatWidth = chatWidth
 
 	topBarHeight := 3
 	bottomBarHeight := 2
