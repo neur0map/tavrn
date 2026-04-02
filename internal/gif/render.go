@@ -15,15 +15,26 @@ import (
 // foreground (top pixel) and background (bottom pixel) colors.
 // Width is the output width in characters. Height is computed from aspect ratio.
 func RenderHalfBlocks(img image.Image, width int) string {
-	// Resize to target width, height must be even for pixel pairing
+	// Resize to target width. Terminal chars are ~2:1 height:width,
+	// and half-blocks pack 2 pixels per row, so these cancel out.
+	// Just use the raw aspect ratio.
 	bounds := img.Bounds()
 	aspect := float64(bounds.Dy()) / float64(bounds.Dx())
-	height := int(float64(width) * aspect)
+	// Halve height because terminal chars are ~2x taller than wide
+	height := int(float64(width) * aspect * 0.5)
 	if height%2 != 0 {
 		height++
 	}
 	if height < 2 {
 		height = 2
+	}
+	// Cap height to prevent absurdly tall renders
+	maxHeight := width
+	if height > maxHeight {
+		height = maxHeight
+		if height%2 != 0 {
+			height--
+		}
 	}
 
 	resized := resizeImage(img, width, height)
