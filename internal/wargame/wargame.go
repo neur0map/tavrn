@@ -54,6 +54,26 @@ func (s *Store) migrate() {
 			PRIMARY KEY (fingerprint, wargame)
 		)
 	`)
+	s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS wargame_participants (
+			fingerprint TEXT PRIMARY KEY,
+			signed_up   DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+}
+
+// Signup registers a user as a wargame participant.
+func (s *Store) Signup(fingerprint string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.db.Exec(`INSERT OR IGNORE INTO wargame_participants (fingerprint) VALUES (?)`, fingerprint)
+}
+
+// IsParticipant checks if a user has signed up for wargames.
+func (s *Store) IsParticipant(fingerprint string) bool {
+	var count int
+	s.db.QueryRow(`SELECT COUNT(*) FROM wargame_participants WHERE fingerprint = ?`, fingerprint).Scan(&count)
+	return count > 0
 }
 
 // SetFlag sets the flag for a wargame level (admin only).
@@ -195,15 +215,16 @@ func (s *Store) UserTotalPoints(fingerprint string) int {
 	return total
 }
 
-// Leaderboard returns top N users by total points.
+// Leaderboard returns top N participants by total points.
+// Includes all signed-up participants, even those with 0 points.
 func (s *Store) Leaderboard(limit int) []LeaderboardEntry {
 	rows, err := s.db.Query(`
-		SELECT wp.fingerprint, COALESCE(u.nickname, wp.fingerprint),
-			   SUM(wp.level) as total_level
-		FROM wargame_progress wp
-		LEFT JOIN users u ON u.fingerprint = wp.fingerprint
-		WHERE wp.level > 0
-		GROUP BY wp.fingerprint
+		SELECT p.fingerprint, COALESCE(u.nickname, p.fingerprint),
+			   COALESCE(SUM(wp.level), 0) as total_level
+		FROM wargame_participants p
+		LEFT JOIN users u ON u.fingerprint = p.fingerprint
+		LEFT JOIN wargame_progress wp ON wp.fingerprint = p.fingerprint
+		GROUP BY p.fingerprint
 		ORDER BY total_level DESC
 		LIMIT ?
 	`, limit)

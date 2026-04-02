@@ -386,6 +386,20 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Text: announcement,
 		})
 		return a, nil
+
+	case WargameSignupMsg:
+		if a.wargameStore != nil {
+			a.wargameStore.Signup(a.session.Fingerprint)
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
+				fmt.Sprintf("%s joined the wargames", a.session.Nickname)))
+			a.onSend(session.Msg{
+				Type: session.MsgSystem,
+				Room: a.session.Room,
+				Text: fmt.Sprintf("%s joined the wargames", a.session.Nickname),
+			})
+		}
+		a.modal = ModalNone
+		return a, nil
 	}
 
 	// Splash state — handle keys directly (tick/resize handled above)
@@ -863,6 +877,10 @@ func (a *App) handleCommand(parsed chat.ParseResult) tea.Cmd {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Use /submit in a wargame room."))
 			return nil
 		}
+		if !a.wargameStore.IsParticipant(a.session.Fingerprint) {
+			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Sign up first — press Y in the rules modal (enter any wargame room)."))
+			return nil
+		}
 		currentLevel := 0
 		progress := a.wargameStore.UserProgress(a.session.Fingerprint)
 		for _, p := range progress {
@@ -1247,7 +1265,8 @@ func (a *App) switchRoom(target string) {
 	if a.roomTypes[target] == "wargame" && !a.seenWargameRooms[target] {
 		a.seenWargameRooms[target] = true
 		a.modal = ModalWargameRules
-		a.wargameRulesModal = NewWargameRulesModal(target)
+		isParticipant := a.wargameStore != nil && a.wargameStore.IsParticipant(a.session.Fingerprint)
+		a.wargameRulesModal = NewWargameRulesModal(target, isParticipant)
 	}
 }
 

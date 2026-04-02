@@ -126,6 +126,9 @@ func TestLeaderboard(t *testing.T) {
 	s.db.Exec(`INSERT INTO users VALUES ('fp1', 'alice')`)
 	s.db.Exec(`INSERT INTO users VALUES ('fp2', 'bob')`)
 
+	s.Signup("fp1")
+	s.Signup("fp2")
+
 	s.SetFlag("bandit", 1, "b1")
 	s.SetFlag("bandit", 2, "b2")
 	s.SetFlag("bandit", 3, "b3")
