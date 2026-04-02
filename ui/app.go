@@ -385,15 +385,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Wrong flag. Try again."))
 			return a, nil
 		}
-		// Success — broadcast to room
+		// Success — announce to the entire tavern
 		totalLevel := a.wargameStore.UserTotalLevel(a.session.Fingerprint)
 		totalPts := a.wargameStore.UserTotalPoints(a.session.Fingerprint)
-		announcement := fmt.Sprintf("%s cleared %s level %d  [Lv.%d | %d pts]",
+		announcement := fmt.Sprintf(">> %s hacked %s level %d  [Lv.%d | %d pts]",
 			a.session.Nickname, strings.ToUpper(a.session.Room), newLevel, totalLevel, totalPts)
 		a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, announcement))
-		a.onSend(session.Msg{
-			Type: session.MsgSystem,
-			Room: a.session.Room,
+		// Broadcast as banner so all rooms see it
+		a.hub.BroadcastAll(session.Msg{
+			Type: session.MsgBanner,
 			Text: announcement,
 		})
 		return a, nil
