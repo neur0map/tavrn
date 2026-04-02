@@ -135,26 +135,29 @@ func (l LeaderboardModal) View(width, height int) string {
 			if len(name) > nameW {
 				name = name[:nameW]
 			}
+			// Pad name manually then style (ANSI codes break fmt padding)
+			padded := name + strings.Repeat(" ", nameW-len(name))
 
-			levelStr := fmt.Sprintf("%d/%d", p.Level, p.MaxLevel)
-
-			// Progress bar
-			barW := 12
-			filled := 0
-			if p.MaxLevel > 0 {
-				filled = p.Level * barW / p.MaxLevel
-			}
-			if filled > barW {
-				filled = barW
-			}
-			bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
-
-			fmt.Fprintf(&b, "  %-*s ", nameW, dim.Render(name))
-			b.WriteString(dimmer.Render(fmt.Sprintf("%-5s ", levelStr)))
-			if p.Level > 0 {
-				b.WriteString(green.Render(bar))
+			if p.MaxLevel == 0 {
+				// No flags set yet — just show the name
+				b.WriteString("  " + dim.Render(padded) + " " + dimmer.Render("no flags yet"))
 			} else {
-				b.WriteString(dimmer.Render(bar))
+				levelStr := fmt.Sprintf("%d/%d", p.Level, p.MaxLevel)
+				levelPad := fmt.Sprintf("%-6s", levelStr)
+
+				barW := 12
+				filled := p.Level * barW / p.MaxLevel
+				if filled > barW {
+					filled = barW
+				}
+				bar := strings.Repeat("█", filled) + strings.Repeat("░", barW-filled)
+
+				b.WriteString("  " + dim.Render(padded) + " " + dimmer.Render(levelPad) + " ")
+				if p.Level > 0 {
+					b.WriteString(green.Render(bar))
+				} else {
+					b.WriteString(dimmer.Render(bar))
+				}
 			}
 			b.WriteString("\n")
 		}
