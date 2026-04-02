@@ -1306,7 +1306,11 @@ func (a *App) doLayout() {
 	a.rooms.Height = mainHeight
 	a.online.Width = onlineWidth
 	a.online.Height = mainHeight
-	a.chat.SetSize(chatWidth, mainHeight)
+	chatHeight := mainHeight
+	if a.roomTypes[a.session.Room] == "wargame" {
+		chatHeight -= 4 // wargame header takes 4 lines
+	}
+	a.chat.SetSize(chatWidth, chatHeight)
 	a.gallery.SetSize(chatWidth, mainHeight)
 	a.gallery.SetScreenOffset(roomsWidth, topBarHeight)
 	if a.sudokuView != nil {
