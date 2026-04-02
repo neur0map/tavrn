@@ -181,12 +181,15 @@ func (s *Searcher) searchDDG(query string) ([]Result, error) {
 // NeedsSearch checks if a message looks like a knowledge question.
 func NeedsSearch(text string) bool {
 	lower := strings.ToLower(text)
+	// Normalize curly quotes to straight
+	lower = strings.ReplaceAll(lower, "\u2018", "'")
+	lower = strings.ReplaceAll(lower, "\u2019", "'")
 	// Remove the @bartender prefix
 	lower = strings.TrimPrefix(lower, "@bartender")
 	lower = strings.TrimSpace(lower)
 
 	triggers := []string{
-		"what is", "what are", "what's", "whats",
+		"what is", "what are", "what's", "whats", "what the",
 		"how do", "how does", "how to", "how is",
 		"why do", "why does", "why is",
 		"explain", "define", "meaning of",
@@ -194,11 +197,17 @@ func NeedsSearch(text string) bool {
 		"when did", "when was", "when is",
 		"where is", "where did",
 		"tell me about", "search for", "look up", "google",
+		"search", "weather", "news", "latest", "current",
+		"can you find", "do you know",
 	}
 	for _, t := range triggers {
 		if strings.Contains(lower, t) {
 			return true
 		}
+	}
+	// Also trigger on questions (ends with ?)
+	if strings.HasSuffix(strings.TrimSpace(lower), "?") {
+		return true
 	}
 	return false
 }
