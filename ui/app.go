@@ -481,7 +481,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				counts = append(counts, len(a.hub.Sessions(rName)))
 			}
 			a.modal = ModalJoinRoom
-			a.joinRoomModal = NewJoinRoomModal(allRooms, counts, a.session.Room)
+			a.joinRoomModal = NewJoinRoomModal(allRooms, counts, a.session.Room, a.roomTypes)
 			return a, nil
 		case "f4":
 			unread := a.unreadMentions()
@@ -557,7 +557,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					counts = append(counts, len(a.hub.Sessions(rName)))
 				}
 				a.modal = ModalJoinRoom
-				a.joinRoomModal = NewJoinRoomModal(allRooms, counts, a.session.Room)
+				a.joinRoomModal = NewJoinRoomModal(allRooms, counts, a.session.Room, a.roomTypes)
 				return a, nil
 			case "h":
 				a.modal = ModalHelp

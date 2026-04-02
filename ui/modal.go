@@ -244,11 +244,12 @@ type JoinRoomMsg struct{ Room string }
 type JoinRoomModal struct {
 	rooms       []string
 	counts      []int
+	roomTypes   map[string]string
 	currentRoom string
 	cursor      int
 }
 
-func NewJoinRoomModal(rooms []string, counts []int, currentRoom string) JoinRoomModal {
+func NewJoinRoomModal(rooms []string, counts []int, currentRoom string, roomTypes map[string]string) JoinRoomModal {
 	cursor := 0
 	for i, r := range rooms {
 		if r == currentRoom {
@@ -259,6 +260,7 @@ func NewJoinRoomModal(rooms []string, counts []int, currentRoom string) JoinRoom
 	return JoinRoomModal{
 		rooms:       rooms,
 		counts:      counts,
+		roomTypes:   roomTypes,
 		currentRoom: currentRoom,
 		cursor:      cursor,
 	}
@@ -301,16 +303,15 @@ func (j JoinRoomModal) View(width, height int) string {
 	headerFillR := lipgloss.NewStyle().Foreground(ColorBorder).Render(rightFill)
 	header := headerFill + headerTitle + headerFillR
 
-	var b2 strings.Builder
-	b2.WriteString(header)
-	b2.WriteString("\n\n")
+	sectionHeader := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	greenHeader := lipgloss.NewStyle().Foreground(ColorGreen).Bold(true)
+	dimSep := lipgloss.NewStyle().Foreground(ColorDimmer)
 
-	for i, rm := range j.rooms {
+	renderRoom := func(b *strings.Builder, i int, rm string) {
 		count := 0
 		if i < len(j.counts) {
 			count = j.counts[i]
 		}
-
 		isCurrent := rm == j.currentRoom
 		isSelected := i == j.cursor
 
@@ -334,8 +335,45 @@ func (j JoinRoomModal) View(width, height int) string {
 			line += tag
 		}
 
-		b2.WriteString(line)
+		b.WriteString(line + "\n")
+	}
+
+	var b2 strings.Builder
+	b2.WriteString(header)
+	b2.WriteString("\n\n")
+
+	// Regular rooms
+	b2.WriteString(sectionHeader.Render("  ROOMS"))
+	b2.WriteString("\n")
+	b2.WriteString("  " + dimSep.Render(strings.Repeat("─", 32)))
+	b2.WriteString("\n")
+	for i, rm := range j.rooms {
+		if j.roomTypes != nil && j.roomTypes[rm] == "wargame" {
+			continue
+		}
+		renderRoom(&b2, i, rm)
+	}
+
+	// Wargame rooms
+	hasWargame := false
+	for _, rm := range j.rooms {
+		if j.roomTypes != nil && j.roomTypes[rm] == "wargame" {
+			hasWargame = true
+			break
+		}
+	}
+	if hasWargame {
 		b2.WriteString("\n")
+		b2.WriteString(greenHeader.Render("  WARGAMES"))
+		b2.WriteString("\n")
+		b2.WriteString("  " + dimSep.Render(strings.Repeat("─", 32)))
+		b2.WriteString("\n")
+		for i, rm := range j.rooms {
+			if j.roomTypes == nil || j.roomTypes[rm] != "wargame" {
+				continue
+			}
+			renderRoom(&b2, i, rm)
+		}
 	}
 
 	b2.WriteString("\n")
