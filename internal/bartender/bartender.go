@@ -109,6 +109,30 @@ type Bartender struct {
 	irritability float64 // 0.0 = calm, 1.0 = furious
 	energy       float64 // 0.0 = exhausted, 1.0 = alert
 	lastRemark   time.Time
+
+	// Live toggle
+	disabled bool
+}
+
+// Disable turns off the bartender at runtime.
+func (b *Bartender) Disable() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.disabled = true
+}
+
+// Enable turns on the bartender at runtime.
+func (b *Bartender) Enable() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.disabled = false
+}
+
+// IsDisabled returns whether the bartender is currently disabled.
+func (b *Bartender) IsDisabled() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.disabled
 }
 
 // New creates a bartender. Returns nil if apiKey is empty.
@@ -149,17 +173,17 @@ func (b *Bartender) CanRespond(fingerprint string) bool {
 }
 
 // ShouldRemark checks if the bartender should make an unprompted remark.
-// Called on each chat message. Returns true roughly every 15-30 min of active chat.
+// Called on each chat message. Returns true roughly every 30-60 min of active chat.
 func (b *Bartender) ShouldRemark() bool {
 	b.moodMu.Lock()
 	defer b.moodMu.Unlock()
 
 	elapsed := time.Since(b.lastRemark)
-	if elapsed < 15*time.Minute {
+	if elapsed < 30*time.Minute {
 		return false
 	}
-	// After 15 min, increasing chance: ~10% per message, capped by 30 min guarantee
-	if elapsed > 30*time.Minute || rand.Float64() < 0.10 {
+	// After 30 min, small chance per message (~5%), guaranteed at 60 min
+	if elapsed > 60*time.Minute || rand.Float64() < 0.05 {
 		b.lastRemark = time.Now()
 		return true
 	}

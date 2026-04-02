@@ -31,6 +31,7 @@ import (
 )
 
 const bannerFile = ".banner"
+const bartenderToggleFile = ".bartender-toggle"
 const addRoomFile = ".addroom"
 const renameRoomFile = ".renameroom"
 const removeRoomFile = ".removeroom"
@@ -105,6 +106,14 @@ func main() {
 			}
 			runListFlags(os.Args[2])
 			return
+		case "--bartender-off":
+			os.WriteFile(resolvedPath(bartenderToggleFile), []byte("off"), 0600)
+			fmt.Println("Bartender disable signal sent.")
+			return
+		case "--bartender-on":
+			os.WriteFile(resolvedPath(bartenderToggleFile), []byte("on"), 0600)
+			fmt.Println("Bartender enable signal sent.")
+			return
 		case "--update":
 			if err := runUpdate(); err != nil {
 				log.Fatalf("update: %v", err)
@@ -122,6 +131,8 @@ func main() {
 			fmt.Println("  tavrn --ban \"nickname\"           Ban a user by nickname (live, kicks them)")
 			fmt.Println("  tavrn --unban \"nickname\"         Unban a user by nickname")
 			fmt.Println("  tavrn --ban-list                 Show all active bans")
+			fmt.Println("  tavrn --bartender-off            Disable bartender (live)")
+			fmt.Println("  tavrn --bartender-on             Enable bartender (live)")
 			fmt.Println("  tavrn --set-flag wg level flag   Set a wargame flag (hashed)")
 			fmt.Println("  tavrn --list-flags wargame       List levels with flags")
 			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
@@ -519,6 +530,7 @@ func runServer() {
 	go watchRemoveRoomFile(st, h)
 	go watchBanFile(h)
 	go watchPurgeFile(h)
+	go watchBartenderToggle(bt)
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
@@ -914,5 +926,33 @@ func watchPurgeFile(h *hub.Hub) {
 		h.BroadcastAll(session.Msg{
 			Type: session.MsgPurge,
 		})
+	}
+}
+
+func watchBartenderToggle(bt *bartender.Bartender) {
+	for {
+		time.Sleep(1 * time.Second)
+
+		data, err := os.ReadFile(bartenderToggleFile)
+		if err != nil {
+			continue
+		}
+
+		os.Remove(bartenderToggleFile)
+
+		if bt == nil {
+			log.Println("bartender: toggle ignored (not initialized)")
+			continue
+		}
+
+		action := strings.TrimSpace(string(data))
+		switch action {
+		case "off":
+			bt.Disable()
+			log.Println("bartender: disabled by admin")
+		case "on":
+			bt.Enable()
+			log.Println("bartender: enabled by admin")
+		}
 	}
 }

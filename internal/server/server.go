@@ -262,7 +262,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		}
 		s.cfg.Hub.Broadcast(msg.Room, msg)
 
-		if s.cfg.Bartender == nil || msg.Type != session.MsgChat {
+		if s.cfg.Bartender == nil || s.cfg.Bartender.IsDisabled() || msg.Type != session.MsgChat {
 			return
 		}
 
