@@ -19,6 +19,7 @@ import (
 	"tavrn.sh/internal/identity"
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/poll"
+	"tavrn.sh/internal/search"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
 	"tavrn.sh/internal/sudoku"
@@ -45,6 +46,7 @@ type Config struct {
 	RoomTypes        map[string]string
 	GifClient        *gif.KlipyClient
 	WargameStore     *wargame.Store
+	Searcher         *search.Searcher
 }
 
 type Server struct {
@@ -289,7 +291,15 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 							}
 						}
 					}()
-					reply, err := s.cfg.Bartender.Respond(gatherContext(), tavernState(), msg.Fingerprint, msg.Nickname, msg.Text, s.cfg.Store.IsOwner(msg.Fingerprint))
+					// Search the web if the message is a knowledge question
+					var searchCtx string
+					if s.cfg.Searcher != nil && search.NeedsSearch(msg.Text) {
+						if results, err := s.cfg.Searcher.Search(msg.Text); err == nil {
+							searchCtx = search.FormatForLLM(results)
+							log.Printf("bartender: web search for %q (%d results)", msg.Text, len(results))
+						}
+					}
+					reply, err := s.cfg.Bartender.Respond(gatherContext(), tavernState(), msg.Fingerprint, msg.Nickname, msg.Text, s.cfg.Store.IsOwner(msg.Fingerprint), searchCtx)
 					close(done)
 					if err != nil {
 						log.Printf("bartender error: %v", err)

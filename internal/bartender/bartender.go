@@ -223,7 +223,7 @@ func (b *Bartender) buildRemarkContext(recent []ChatMsg) string {
 }
 
 // Respond generates a bartender response given recent chat context.
-func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, triggerFingerprint, triggerNick, triggerText string, isOwner bool) (string, error) {
+func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, triggerFingerprint, triggerNick, triggerText string, isOwner bool, searchContext ...string) (string, error) {
 	var contextParts []string
 	for _, m := range recentMessages {
 		contextParts = append(contextParts, fmt.Sprintf("%s: %s", m.Nickname, m.Text))
@@ -256,7 +256,13 @@ func (b *Bartender) Respond(recentMessages []ChatMsg, state TavernState, trigger
 	// Mood
 	moodBlock := b.moodBlock()
 
-	systemPrompt := b.soul + memoryBlock + userBlock + ownerBlock + stateBlock + moodBlock
+	// Web search context (if provided)
+	var searchBlock string
+	if len(searchContext) > 0 && searchContext[0] != "" {
+		searchBlock = "\n\n" + searchContext[0] + "\nUse this info to answer accurately but stay in character. Keep it simple."
+	}
+
+	systemPrompt := b.soul + memoryBlock + userBlock + ownerBlock + stateBlock + moodBlock + searchBlock
 
 	// Security hardening: sandwich pattern.
 	// System prompt first (identity), user content in middle, hard rules last.

@@ -22,6 +22,7 @@ import (
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/poll"
 	"tavrn.sh/internal/sanitize"
+	"tavrn.sh/internal/search"
 	"tavrn.sh/internal/server"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
@@ -488,6 +489,16 @@ func runServer() {
 		log.Println("gif search: disabled (no KLIPY_API_KEY)")
 	}
 
+	// Web search for bartender — Exa with DuckDuckGo fallback
+	var searcher *search.Searcher
+	exaKey := os.Getenv("EXA_API_KEY")
+	searcher = search.New(exaKey)
+	if exaKey != "" {
+		log.Println("web search: enabled (Exa + DuckDuckGo fallback)")
+	} else {
+		log.Println("web search: DuckDuckGo only (no EXA_API_KEY)")
+	}
+
 	srv, err := server.New(server.Config{
 		Host:             "0.0.0.0",
 		Port:             port,
@@ -507,6 +518,7 @@ func runServer() {
 		RoomTypes:        cfg.RoomTypeMap(),
 		GifClient:        gifClient,
 		WargameStore:     wargame.New(st.DB()),
+		Searcher:         searcher,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)
