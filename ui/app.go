@@ -195,7 +195,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.state == stateTavern {
 			a.chat.Tick()
-			TickGifAnimations(a.chat.messages)
+			if TickGifAnimations(a.chat.messages) {
+				a.chat.renderMessages() // update viewport content without scrolling
+			}
 			a.pruneExpiredMentions()
 			if a.sudokuView != nil {
 				a.sudokuView.Tick()
