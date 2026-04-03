@@ -991,14 +991,18 @@ func (a *App) handleCommand(parsed chat.ParseResult) tea.Cmd {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "DMs are not enabled."))
 			return nil
 		}
-		name := strings.TrimSpace(parsed.Args)
-		name = strings.TrimPrefix(name, "@")
-		if name == "" {
-			// Just toggle to DM mode
+		args := strings.TrimSpace(parsed.Args)
+		if args == "" {
 			a.toggleDMMode()
 			return nil
 		}
-		// Look up user by nickname
+		// Split into name and optional message: /dm @name hello there
+		parts := strings.SplitN(args, " ", 2)
+		name := strings.TrimPrefix(parts[0], "@")
+		var firstMsg string
+		if len(parts) > 1 {
+			firstMsg = strings.TrimSpace(parts[1])
+		}
 		peerFP, err := a.store.FingerprintByNickname(name)
 		if err != nil {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room,
@@ -1009,7 +1013,6 @@ func (a *App) handleCommand(parsed chat.ParseResult) tea.Cmd {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "You can't DM yourself."))
 			return nil
 		}
-		// Switch to DM mode and open conversation
 		a.dmMode = true
 		a.dmInConvo = true
 		a.dmPeerFP = peerFP
@@ -1020,6 +1023,25 @@ func (a *App) handleCommand(parsed chat.ParseResult) tea.Cmd {
 		msgs, _ := a.dmStore.Messages(a.session.Fingerprint, peerFP, 50)
 		a.dmChat.SetMessages(msgs)
 		a.dmStore.MarkRead(a.session.Fingerprint, peerFP)
+		// Send first message if provided
+		if firstMsg != "" {
+			a.dmStore.Send(a.session.Fingerprint, peerFP, a.session.Nickname, firstMsg)
+			a.dmChat.AddMessage(dm.DirectMessage{
+				FromFP:    a.session.Fingerprint,
+				ToFP:      peerFP,
+				FromNick:  a.session.Nickname,
+				Text:      firstMsg,
+				CreatedAt: time.Now(),
+			})
+			a.onSend(session.Msg{
+				Type:        session.MsgDM,
+				Fingerprint: a.session.Fingerprint,
+				Nickname:    a.session.Nickname,
+				ColorIndex:  a.session.ColorIndex,
+				Text:        peerFP + "\x00" + firstMsg,
+				Room:        "dm",
+			})
+		}
 	case "leaderboard", "lb":
 		if a.wargameStore == nil {
 			a.chat.AddMessage(chat.NewSystemMessage(a.session.Room, "Wargame system not available."))
