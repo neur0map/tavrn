@@ -23,6 +23,9 @@ var Changelog = []Entry{
 			"join room modal separates rooms and wargames",
 			"world clock in online panel (NYC, CHI, LDN, BER, TYO)",
 			"hacker leaderboard mini-view in sidebar",
+			"private DMs — TAB to toggle, /dm @name to open",
+			"DM inbox with unread counts and conversation list",
+			"live DM delivery to online users",
 		},
 	},
 	{
