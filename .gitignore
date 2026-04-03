@@ -15,3 +15,5 @@ docs/*-design.md
 .env
 tavern.yaml
 bartender/soul.md
+docs/plans/
+.DS_Store

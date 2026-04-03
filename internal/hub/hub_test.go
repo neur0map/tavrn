@@ -11,8 +11,8 @@ func TestRegisterAndBroadcast(t *testing.T) {
 	go h.Run()
 	defer h.Stop()
 
-	s1 := session.New("fp1", "alice", 0, false)
-	s2 := session.New("fp2", "bob", 1, false)
+	s1 := session.New("fp1", "alice", 0, false, "lounge")
+	s2 := session.New("fp2", "bob", 1, false, "lounge")
 
 	h.Register(s1)
 	h.Register(s2)
@@ -48,7 +48,7 @@ func TestUnregister(t *testing.T) {
 	go h.Run()
 	defer h.Stop()
 
-	s1 := session.New("fp1", "alice", 0, false)
+	s1 := session.New("fp1", "alice", 0, false, "lounge")
 	h.Register(s1)
 	time.Sleep(10 * time.Millisecond)
 
@@ -65,9 +65,9 @@ func TestBroadcastOnlyToRoom(t *testing.T) {
 	go h.Run()
 	defer h.Stop()
 
-	s1 := session.New("fp1", "alice", 0, false)
+	s1 := session.New("fp1", "alice", 0, false, "lounge")
 	s1.Room = "lounge"
-	s2 := session.New("fp2", "bob", 1, false)
+	s2 := session.New("fp2", "bob", 1, false, "lounge")
 	s2.Room = "gallery"
 
 	h.Register(s1)
@@ -94,7 +94,7 @@ func TestDropSlowClient(t *testing.T) {
 	go h.Run()
 	defer h.Stop()
 
-	s1 := session.New("fp1", "alice", 0, false)
+	s1 := session.New("fp1", "alice", 0, false, "lounge")
 	h.Register(s1)
 	time.Sleep(10 * time.Millisecond)
 

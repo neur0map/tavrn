@@ -152,8 +152,9 @@ func New(apiKey, soul string, store MemoryStore) *Bartender {
 }
 
 // ShouldRespond checks if a message triggers the bartender.
-func ShouldRespond(text, room string) bool {
-	if room != "lounge" {
+// barRoom is the room the bartender operates in (typically the first/landing room).
+func ShouldRespond(text, room, barRoom string) bool {
+	if room != barRoom {
 		return false
 	}
 	lower := strings.ToLower(text)

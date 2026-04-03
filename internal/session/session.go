@@ -77,12 +77,12 @@ type Session struct {
 }
 
 // New creates a session with a buffered send channel (256 messages).
-func New(fingerprint, nickname string, colorIndex int, flair bool) *Session {
+func New(fingerprint, nickname string, colorIndex int, flair bool, defaultRoom string) *Session {
 	return &Session{
 		Fingerprint: fingerprint,
 		Nickname:    nickname,
 		Flair:       flair,
-		Room:        "lounge",
+		Room:        defaultRoom,
 		ColorIndex:  colorIndex,
 		Send:        make(chan Msg, 256),
 		ChatLimiter: ratelimit.NewChat(),

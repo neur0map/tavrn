@@ -29,7 +29,7 @@ type RoomsPanel struct {
 }
 
 func NewRoomsPanel() RoomsPanel {
-	return RoomsPanel{CurrentRoom: "lounge"}
+	return RoomsPanel{}
 }
 
 func (r RoomsPanel) renderRoom(rm RoomInfo, contentW int) string {

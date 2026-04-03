@@ -3,7 +3,7 @@ package session
 import "testing"
 
 func TestNewSession(t *testing.T) {
-	s := New("fp123", "alice", 5, true)
+	s := New("fp123", "alice", 5, true, "lounge")
 	if s.Fingerprint != "fp123" {
 		t.Errorf("fingerprint = %q, want fp123", s.Fingerprint)
 	}
@@ -22,7 +22,7 @@ func TestNewSession(t *testing.T) {
 }
 
 func TestNewSessionDefaults(t *testing.T) {
-	s := New("fp", "bob", 0, false)
+	s := New("fp", "bob", 0, false, "lounge")
 	if s.Flair {
 		t.Error("expected flair = false")
 	}
@@ -32,14 +32,14 @@ func TestNewSessionDefaults(t *testing.T) {
 }
 
 func TestSessionSendChannel(t *testing.T) {
-	s := New("fp", "nick", 0, false)
+	s := New("fp", "nick", 0, false, "lounge")
 	if cap(s.Send) != 256 {
 		t.Errorf("send channel capacity = %d, want 256", cap(s.Send))
 	}
 }
 
 func TestSessionChatLimiter(t *testing.T) {
-	s := New("fp", "nick", 0, false)
+	s := New("fp", "nick", 0, false, "lounge")
 	if s.ChatLimiter == nil {
 		t.Fatal("expected ChatLimiter to be initialized")
 	}

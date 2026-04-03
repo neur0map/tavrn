@@ -75,7 +75,7 @@ func (c *Config) validate() error {
 			return fmt.Errorf("tavern.yaml: room name cannot be empty")
 		}
 		if !validRoomTypes[r.Type] {
-			return fmt.Errorf("tavern.yaml: invalid room type %q for room %q (valid: chat, gallery, games)", r.Type, r.Name)
+			return fmt.Errorf("tavern.yaml: invalid room type %q for room %q (valid: chat, gallery, games, wargame)", r.Type, r.Name)
 		}
 	}
 	return nil

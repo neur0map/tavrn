@@ -118,7 +118,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 
 	firstRoom := s.cfg.FirstRoom
 
-	sess := session.New(fingerprint, nickname, colorIndex, flair)
+	sess := session.New(fingerprint, nickname, colorIndex, flair, firstRoom)
 	s.cfg.Hub.Register(sess)
 
 	go func() {
@@ -269,7 +269,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		}
 
 		// Direct @bartender trigger
-		if bartender.ShouldRespond(msg.Text, msg.Room) {
+		if bartender.ShouldRespond(msg.Text, msg.Room, firstRoom) {
 			if s.cfg.Bartender.CanRespond(msg.Fingerprint) {
 				go func() {
 					// Keep typing indicator alive until API responds

@@ -86,7 +86,7 @@ Run your own tavern. Join the network.
 - One binary, one config — spin up your own tavern on your own server
 - Standalone mode: fully isolated, your rules, your rooms, your music
 - Each tavern keeps its own identity — custom name, rooms, catalogs, AI personality
-- GPL-3.0 licensed: all taverns must keep their source open
+- MIT licensed: fork it, run it, make it yours
 
 ### The Network — tavrn.sh as the Registry
 
@@ -102,7 +102,7 @@ tavrn.sh is the directory, not the host. Tavern owners run their own servers.
 
 ### How to Join the Network
 
-1. Fork the repo, deploy your tavern (GPL-3.0 requires source stays open)
+1. Fork the repo, deploy your tavern (MIT license)
 2. Submit a PR adding your tavern to `taverns.json` (name, host, description)
 3. PR gets reviewed — tavern must be running and reachable
 4. Once merged, your tavern appears on the bulletin board and gets a `*.tavrn.sh` subdomain
