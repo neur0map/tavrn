@@ -1381,8 +1381,13 @@ func (a *App) openDMConvo(peerFP, peerNick string) {
 	if a.dmStore != nil {
 		msgs, _ := a.dmStore.Messages(a.session.Fingerprint, peerFP, 50)
 		for _, m := range msgs {
-			a.dmChatView.AddMessage(chat.NewUserMessage(
-				m.FromFP, m.FromNick, "dm", m.Text, 0))
+			a.dmChatView.AddMessage(chat.Message{
+				Fingerprint: m.FromFP,
+				Nickname:    m.FromNick,
+				Room:        "dm",
+				Text:        m.Text,
+				Timestamp:   m.CreatedAt,
+			})
 		}
 		a.dmStore.MarkRead(a.session.Fingerprint, peerFP)
 	}
