@@ -1761,7 +1761,7 @@ func (a App) nextTickInterval() time.Duration {
 	if a.chat.HasActiveLogs() {
 		return typingTickInterval
 	}
-	if a.chat.HasAnimatingGifs() && !a.chat.IsScrolling() {
+	if a.chat.HasAnimatingGifs() {
 		return 80 * time.Millisecond
 	}
 	return idleTickInterval
