@@ -97,13 +97,14 @@ type App struct {
 	sudokuGame *sudoku.Game
 
 	// Direct messages
-	dmStore    *dm.Store
-	dmMode     bool // true = DM screen, false = tavern
-	dmInbox    DMInbox
-	dmChat     DMChat
-	dmInConvo  bool   // true = viewing a conversation, false = inbox
-	dmPeerFP   string // current DM partner fingerprint
-	dmPeerNick string // current DM partner nickname
+	dmStore       *dm.Store
+	dmMode        bool // true = DM screen, false = tavern
+	dmInbox       DMInbox
+	dmChat        DMChat
+	dmInConvo     bool   // true = viewing a conversation, false = inbox
+	dmPeerFP      string // current DM partner fingerprint
+	dmPeerNick    string // current DM partner nickname
+	dmUnreadCache int
 
 	// Tankard collectible
 	tankard        TankardView
@@ -226,6 +227,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if a.hub.OnlineCount() > 0 {
 			a.online.Frame++
+		}
+		// Refresh DM unread cache on tick (not every render)
+		if a.dmStore != nil {
+			a.dmUnreadCache = a.dmStore.UnreadCount(a.session.Fingerprint)
 		}
 		if a.state == stateTavern {
 			a.chat.Tick()
@@ -1595,11 +1600,8 @@ func (a App) View() tea.View {
 		}
 	}
 	a.rooms.MentionCounts = mentionCounts
-	if a.dmStore != nil {
-		dmUnread := a.dmStore.UnreadCount(a.session.Fingerprint)
-		a.rooms.DMUnread = dmUnread
-		a.bottomBar.DMUnread = dmUnread
-	}
+	a.rooms.DMUnread = a.dmUnreadCache
+	a.bottomBar.DMUnread = a.dmUnreadCache
 
 	a.bottomBar.MentionCount = a.unreadMentionCount("")
 	a.bottomBar.IsTankard = a.tankardFocused
