@@ -48,6 +48,7 @@ type ChatView struct {
 	ownNickname      string
 	OwnerName        string
 	OwnerFingerprint string
+	lastScrollAt     time.Time
 }
 
 func NewChatView() ChatView {
@@ -178,6 +179,11 @@ func (c ChatView) HasTypingUsers() bool {
 
 func (c ChatView) HasActiveLogs() bool {
 	return len(c.sysLogs) > 0
+}
+
+// IsScrolling returns true if user scrolled within the last 2 seconds.
+func (c ChatView) IsScrolling() bool {
+	return !c.lastScrollAt.IsZero() && time.Since(c.lastScrollAt) < 2*time.Second
 }
 
 func (c ChatView) HasAnimatingGifs() bool {
@@ -373,15 +379,18 @@ func (c ChatView) Update(msg tea.Msg) (ChatView, tea.Cmd) {
 			return c, tea.Batch(cmds...)
 		case "shift+up", "up":
 			c.viewport.ScrollUp(3)
+			c.lastScrollAt = time.Now()
 			return c, nil
 		case "shift+down", "down":
 			c.viewport.ScrollDown(3)
+			c.lastScrollAt = time.Now()
 			return c, nil
 		}
 	}
 
 	// Route mouse wheel to viewport
 	if m, ok := msg.(tea.MouseWheelMsg); ok {
+		c.lastScrollAt = time.Now()
 		switch m.Button {
 		case tea.MouseWheelUp:
 			c.viewport.ScrollUp(3)

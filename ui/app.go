@@ -240,7 +240,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.state == stateTavern {
 			a.refreshCaches()
 			a.chat.Tick()
-			if TickGifAnimations(a.chat.messages) {
+			if !a.chat.IsScrolling() && TickGifAnimations(a.chat.messages) {
 				a.chat.renderMessages()
 			}
 			if a.dmMode && a.dmInConvo {
@@ -1761,7 +1761,7 @@ func (a App) nextTickInterval() time.Duration {
 	if a.chat.HasActiveLogs() {
 		return typingTickInterval
 	}
-	if a.chat.HasAnimatingGifs() {
+	if a.chat.HasAnimatingGifs() && !a.chat.IsScrolling() {
 		return 80 * time.Millisecond
 	}
 	return idleTickInterval
