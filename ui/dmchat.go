@@ -76,7 +76,7 @@ func (d *DMChat) AddMessage(msg dm.DirectMessage) {
 
 func (d *DMChat) renderMessages() {
 	now := time.Now()
-	wrapW := d.width - 12
+	wrapW := d.width - 10
 	if wrapW < 20 {
 		wrapW = 20
 	}
