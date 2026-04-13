@@ -88,6 +88,8 @@ func (h HelpModal) View(width, height int) string {
 		{"F6", "tankard clicker"},
 		{"F7", "leaderboard"},
 		{"TAB", "toggle DMs"},
+		{"SHIFT+TAB", "reddit feed"},
+		{"o", "focus shared posts"},
 		{"ESC", "close modal / unfocus"},
 		{"SHIFT+arrows", "scroll chat"},
 	}
@@ -122,6 +124,35 @@ func (h HelpModal) View(width, height int) string {
 		{"click + drag", "move your notes"},
 	}
 	for _, k := range gkeys {
+		fmt.Fprintf(&b, "  %s  %s\n", cmd.Width(18).Render(k.k), desc.Render(k.d))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(cat.Render("FEED KEYS"))
+	b.WriteString("\n")
+	fkeys := []struct{ k, d string }{
+		{"j/k or arrows", "scroll posts"},
+		{"ENTER", "open comments"},
+		{"o", "copy link to clipboard"},
+		{"s", "share post to chat"},
+		{"ESC", "back to list"},
+		{"SHIFT+TAB", "close feed"},
+	}
+	for _, k := range fkeys {
+		fmt.Fprintf(&b, "  %s  %s\n", cmd.Width(18).Render(k.k), desc.Render(k.d))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(cat.Render("POST FOCUS (in chat)"))
+	b.WriteString("\n")
+	pkeys := []struct{ k, d string }{
+		{"o", "enter post focus"},
+		{"arrows", "navigate posts"},
+		{"ENTER", "open in feed"},
+		{"o", "copy link"},
+		{"ESC", "exit focus"},
+	}
+	for _, k := range pkeys {
 		fmt.Fprintf(&b, "  %s  %s\n", cmd.Width(18).Render(k.k), desc.Render(k.d))
 	}
 

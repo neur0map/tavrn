@@ -74,8 +74,8 @@ func (b BottomBar) View() string {
 			k.Render("F3") + " " + d.Render("rooms") + sep +
 			f4 + sep +
 			tabDM + sep +
-			k.Render("F6") + " " + d.Render("tankard") + sep +
-			k.Render("F7") + " " + d.Render("leaderboard") + sep +
+			k.Render("S-TAB") + " " + d.Render("feed") + sep +
+			k.Render("o") + " " + d.Render("posts") + sep +
 			k.Render("SHIFT+↑↓") + " " + d.Render("scroll")
 	}
 
