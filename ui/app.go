@@ -1746,9 +1746,12 @@ func (a *App) doLayout() {
 		chatWidth = a.width
 	}
 
+	// When feed is active, hide the online sidebar and reclaim the space
 	feedWidth := 0
 	if a.feedActive && a.session.Room == a.firstRoom {
-		feedWidth = chatWidth * 2 / 3 // feed gets 2/3, chat gets 1/3
+		chatWidth = chatWidth + onlineWidth // reclaim online sidebar space
+		onlineWidth = 0
+		feedWidth = chatWidth * 2 / 3
 		if feedWidth < 30 {
 			feedWidth = 30
 		}
