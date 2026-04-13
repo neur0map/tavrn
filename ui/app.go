@@ -786,10 +786,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode && a.feedFocused {
 		switch msg := msg.(type) {
 		case tea.KeyPressMsg:
+			// Get the relevant post — comment view uses commentPost, list uses cursor
+			post := a.feed.CurrentPost()
+
 			switch msg.String() {
 			case "enter":
 				if !a.feed.InCommentView() {
-					if post := a.feed.SelectedPost(); post != nil {
+					if post != nil {
 						a.feed.loadingComment = true
 						postCopy := *post
 						rc := a.redditClient
@@ -801,12 +804,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return a, nil
 			case "s":
-				if post := a.feed.SelectedPost(); post != nil {
+				// Share works in both list and comment view
+				if post != nil {
 					return a.shareFeedPost(post)
 				}
 			case "o":
-				// Copy link to clipboard via OSC 52 (works over SSH)
-				if post := a.feed.SelectedPost(); post != nil {
+				// Copy link works in both list and comment view
+				if post != nil {
 					url := post.URL
 					if post.IsSelf {
 						url = "https://reddit.com" + post.Permalink

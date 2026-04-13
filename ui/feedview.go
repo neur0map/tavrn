@@ -77,6 +77,15 @@ func (f *FeedView) SelectedPost() *reddit.Post {
 	return nil
 }
 
+// CurrentPost returns the relevant post for the current view.
+// In comment view, returns the post being viewed. In list, returns the selected post.
+func (f *FeedView) CurrentPost() *reddit.Post {
+	if f.state == feedStateComment && f.commentPost != nil {
+		return f.commentPost
+	}
+	return f.SelectedPost()
+}
+
 func (f *FeedView) InCommentView() bool {
 	return f.state == feedStateComment
 }
