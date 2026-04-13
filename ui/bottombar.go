@@ -75,8 +75,7 @@ func (b BottomBar) View() string {
 			f4 + sep +
 			tabDM + sep +
 			k.Render("S-TAB") + " " + d.Render("feed") + sep +
-			k.Render("o") + " " + d.Render("posts") + sep +
-			k.Render("SHIFT+↑↓") + " " + d.Render("scroll")
+			k.Render("o") + " " + d.Render("posts")
 	}
 
 	return BottomBarStyle.Width(b.Width).MaxWidth(b.Width).Render(content)
