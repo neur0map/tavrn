@@ -103,11 +103,32 @@ This fingerprint is how the server identifies you as the owner when you connect 
 ```bash
 mkdir -p /etc/tavrn
 cat > /etc/tavrn/env << 'EOF'
-OPENAI_API_KEY=         # Required for bartender (GPT-powered)
-KLIPY_API_KEY=          # Required for /gif search
-EXA_API_KEY=            # Optional — bartender web search context
+OPENAI_API_KEY=              # Required for bartender (GPT-powered)
+KLIPY_API_KEY=               # Required for /gif search
+EXA_API_KEY=                 # Optional — bartender web search context
+REDDIT_CLIENT_ID=            # Required for reddit feed (OAuth)
+REDDIT_CLIENT_SECRET=        # Required for reddit feed (OAuth)
 EOF
 ```
+
+### Reddit feed credentials
+
+The reddit feed requires OAuth credentials to avoid IP blocks on cloud servers.
+
+1. Go to https://www.reddit.com/prefs/apps/ and click **"create another app..."**
+2. Set type to **web app**, pick any name, set redirect URI to `http://localhost`
+3. Note the **client ID** (string under the app name) and **secret**
+4. Add both to `/etc/tavrn/env`
+
+Then add subreddits to the feed:
+
+```bash
+cd /home/tavrn/tavrn
+sudo -u tavrn ./tavrn --feed-add golang commandline rust
+sudo -u tavrn ./tavrn --feed-list
+```
+
+Subreddits are stored in the database, not in config files. Always run admin commands from `/home/tavrn/tavrn` so they use the same database as the server.
 
 ---
 
