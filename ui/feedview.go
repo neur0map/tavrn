@@ -163,7 +163,7 @@ func (f FeedView) renderCard(post reddit.Post, selected bool) string {
 	if post.IsSelf {
 		url = "https://reddit.com" + post.Permalink
 	}
-	link := linkStyle.Render(osc8Link(url, truncateURL(url, cardW)))
+	link := linkStyle.Render(truncateURL(url, cardW))
 
 	var parts []string
 
@@ -242,6 +242,14 @@ func (f *FeedView) renderCommentView() {
 	meta := fmt.Sprintf("r/%s  %d ^  %d comments  %s",
 		p.Subreddit, p.Score, p.NumComments, feedShortTimeAgo(p.CreatedUTC))
 	b.WriteString(dimStyle.Render(meta))
+	b.WriteString("\n")
+	// Show link
+	url := p.URL
+	if p.IsSelf {
+		url = "https://reddit.com" + p.Permalink
+	}
+	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	b.WriteString(linkStyle.Render(url))
 	b.WriteString("\n")
 	b.WriteString(dimStyle.Render(strings.Repeat("─", f.width-4)))
 	b.WriteString("\n")

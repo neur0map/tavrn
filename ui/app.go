@@ -78,6 +78,7 @@ type App struct {
 	feedActive   bool
 	feedFocused  bool // true = feed has input, false = chat has input
 	redditClient *reddit.Client
+	lastShareAt  time.Time // share cooldown
 
 	// Modal
 	modal           ModalType
@@ -804,10 +805,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return a.shareFeedPost(post)
 				}
 			case "o":
-				// Show clickable OSC 8 link for selected post
+				// Copy link to chat as system log so user can highlight and copy
 				if post := a.feed.SelectedPost(); post != nil {
-					url := "https://reddit.com" + post.Permalink
-					a.chat.AddSystemLog(osc8Link(url, url))
+					url := post.URL
+					if post.IsSelf {
+						url = "https://reddit.com" + post.Permalink
+					}
+					a.chat.AddSystemLog(url)
 				}
 				return a, nil
 			case "esc":
@@ -977,6 +981,13 @@ func (a App) applyNickChange(nick string) (tea.Model, tea.Cmd) {
 }
 
 func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
+	// 3-minute cooldown between shares
+	if time.Since(a.lastShareAt) < 3*time.Minute {
+		remaining := 3*time.Minute - time.Since(a.lastShareAt)
+		a.chat.AddSystemLog(fmt.Sprintf("Wait %ds before sharing again", int(remaining.Seconds())))
+		return a, nil
+	}
+	a.lastShareAt = time.Now()
 	a.onSend(session.Msg{
 		Type:           session.MsgRedditShare,
 		Nickname:       a.session.Nickname,
