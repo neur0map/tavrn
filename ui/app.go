@@ -1003,13 +1003,13 @@ func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
 
 func (a App) loadThumbnail(postID, previewURL string) tea.Cmd {
 	rc := a.redditClient
-	// Render at feed panel width minus card border/padding (4 chars)
+	// Render at feed panel width minus card border/padding
 	thumbW := a.feed.width - 6
 	if thumbW < 20 {
 		thumbW = 20
 	}
-	if thumbW > 60 {
-		thumbW = 60
+	if thumbW > 90 {
+		thumbW = 90
 	}
 	return func() tea.Msg {
 		img, err := rc.FetchImage(previewURL)
@@ -1748,12 +1748,12 @@ func (a *App) doLayout() {
 
 	feedWidth := 0
 	if a.feedActive && a.session.Room == a.firstRoom {
-		feedWidth = chatWidth / 2
+		feedWidth = chatWidth * 2 / 3 // feed gets 2/3, chat gets 1/3
 		if feedWidth < 30 {
 			feedWidth = 30
 		}
-		if feedWidth > chatWidth-30 {
-			feedWidth = chatWidth - 30
+		if feedWidth > chatWidth-25 {
+			feedWidth = chatWidth - 25
 		}
 		chatWidth = chatWidth - feedWidth
 	}

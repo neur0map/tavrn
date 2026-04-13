@@ -333,17 +333,17 @@ func (jp *jsonPost) toPost() Post {
 		IsVideo:     jp.IsVideo,
 	}
 
-	// Extract best preview image — closest to 320px wide.
+	// Extract best preview image — closest to 640px wide for large renders.
 	if jp.Preview != nil && len(jp.Preview.Images) > 0 {
 		img := jp.Preview.Images[0]
 
 		bestURL := img.Source.URL
 		bestW := img.Source.Width
 		bestH := img.Source.Height
-		bestDiff := math.Abs(float64(bestW) - 320)
+		bestDiff := math.Abs(float64(bestW) - 640)
 
 		for _, res := range img.Resolutions {
-			diff := math.Abs(float64(res.Width) - 320)
+			diff := math.Abs(float64(res.Width) - 640)
 			if diff < bestDiff {
 				bestURL = res.URL
 				bestW = res.Width
