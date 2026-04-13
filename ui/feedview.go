@@ -411,30 +411,8 @@ func (f FeedView) updateComments(msg tea.Msg) (FeedView, tea.Cmd) {
 }
 
 func (f *FeedView) ensureVisible() {
-	visible := f.visibleCount()
-	if f.cursor < f.scroll {
-		f.scroll = f.cursor
-	} else if f.cursor >= f.scroll+visible {
-		f.scroll = f.cursor - visible + 1
-	}
-}
-
-func (f FeedView) visibleCount() int {
-	h := f.height - 4
-	count := 0
-	used := 0
-	for i := f.scroll; i < len(f.posts) && used < h; i++ {
-		if f.posts[i].HasImage {
-			used += 8 // image card takes more space
-		} else {
-			used += 4 // compact card with border
-		}
-		count++
-	}
-	if count == 0 {
-		count = 1
-	}
-	return count
+	// Keep cursor post always at the top — simple and always correct.
+	f.scroll = f.cursor
 }
 
 // Helpers
