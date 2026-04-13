@@ -2077,7 +2077,7 @@ func (a App) nextTickInterval() time.Duration {
 		return typingTickInterval
 	}
 	if a.chat.HasAnimatingGifs() {
-		return 80 * time.Millisecond
+		return 50 * time.Millisecond
 	}
 	return idleTickInterval
 }
