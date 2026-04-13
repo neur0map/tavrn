@@ -666,6 +666,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 		case "tab":
+			// When feed is active, Tab switches focus between feed and chat
+			if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode {
+				a.feedFocused = !a.feedFocused
+				if !a.feedFocused {
+					a.chat.input.Focus()
+				} else {
+					a.chat.input.Blur()
+				}
+				return a, nil
+			}
 			// Toggle DM mode only when input is empty and not in gallery/games
 			if a.dmStore != nil && !a.chat.HasInput() &&
 				a.roomTypes[a.session.Room] != "gallery" &&
@@ -807,56 +817,44 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
-	// Feed panel active in lounge — Tab switches focus between feed and chat
-	if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode {
-		if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "tab" {
-			a.feedFocused = !a.feedFocused
-			if !a.feedFocused {
-				a.chat.input.Focus()
-			} else {
-				a.chat.input.Blur()
-			}
-			return a, nil
-		}
-
-		if a.feedFocused {
-			switch msg := msg.(type) {
-			case tea.KeyPressMsg:
-				switch msg.String() {
-				case "enter":
-					if !a.feed.InCommentView() {
-						if post := a.feed.SelectedPost(); post != nil {
-							a.feed.loadingComment = true
-							postCopy := *post
-							rc := a.redditClient
-							return a, func() tea.Msg {
-								comments, _ := rc.FetchComments(postCopy.Subreddit, postCopy.ID, 20)
-								return feedCommentsMsg{comments: comments, post: &postCopy}
-							}
+	// Feed panel active in lounge — input goes to feed when focused
+	if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode && a.feedFocused {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			switch msg.String() {
+			case "enter":
+				if !a.feed.InCommentView() {
+					if post := a.feed.SelectedPost(); post != nil {
+						a.feed.loadingComment = true
+						postCopy := *post
+						rc := a.redditClient
+						return a, func() tea.Msg {
+							comments, _ := rc.FetchComments(postCopy.Subreddit, postCopy.ID, 20)
+							return feedCommentsMsg{comments: comments, post: &postCopy}
 						}
 					}
-					return a, nil
-				case "s":
-					if post := a.feed.SelectedPost(); post != nil {
-						return a.shareFeedPost(post)
-					}
-				case "esc":
-					if a.feed.InCommentView() {
-						a.feed.BackToList()
-						return a, nil
-					}
-				case "ctrl+c":
-					return a, tea.Quit
 				}
-			case tea.MouseWheelMsg:
-				var cmd tea.Cmd
-				a.feed, cmd = a.feed.Update(msg)
-				return a, cmd
+				return a, nil
+			case "s":
+				if post := a.feed.SelectedPost(); post != nil {
+					return a.shareFeedPost(post)
+				}
+			case "esc":
+				if a.feed.InCommentView() {
+					a.feed.BackToList()
+					return a, nil
+				}
+			case "ctrl+c":
+				return a, tea.Quit
 			}
+		case tea.MouseWheelMsg:
 			var cmd tea.Cmd
 			a.feed, cmd = a.feed.Update(msg)
 			return a, cmd
 		}
+		var cmd tea.Cmd
+		a.feed, cmd = a.feed.Update(msg)
+		return a, cmd
 	}
 
 	// Normal chat rooms
