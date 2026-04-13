@@ -139,75 +139,19 @@ func (f FeedView) viewList() string {
 	for i := f.scroll; i < len(f.posts) && usedLines < contentH; i++ {
 		post := f.posts[i]
 		selected := i == f.cursor
-
-		if post.HasImage {
-			card := f.renderCard(post, selected)
-			cardLines := strings.Count(card, "\n") + 1
-			if usedLines+cardLines > contentH {
-				break
-			}
-			lines = append(lines, card)
-			usedLines += cardLines
-		} else {
-			row := f.renderCompact(post, selected)
-			rowLines := strings.Count(row, "\n") + 1
-			if usedLines+rowLines > contentH {
-				break
-			}
-			lines = append(lines, row)
-			usedLines += rowLines
+		card := f.renderCard(post, selected)
+		cardLines := strings.Count(card, "\n") + 1
+		if usedLines+cardLines > contentH && i > f.scroll {
+			break // don't break on first post — always show at least one
 		}
+		lines = append(lines, card)
+		usedLines += cardLines
 	}
 
 	content := strings.Join(lines, "\n")
 	return lipgloss.NewStyle().
 		Width(f.width).
 		Render(content)
-}
-
-func (f FeedView) renderCompact(post reddit.Post, selected bool) string {
-	cardW := f.width - 4
-	if cardW < 20 {
-		cardW = 20
-	}
-
-	titleStyle := lipgloss.NewStyle()
-	dimStyle := lipgloss.NewStyle().Foreground(ColorDim)
-
-	if selected {
-		titleStyle = titleStyle.Bold(true).Foreground(lipgloss.Color("15"))
-	}
-
-	title := post.Title
-	titleW := cardW - 4
-	if len(title) > titleW {
-		title = title[:titleW-3] + "..."
-	}
-
-	sub := "r/" + post.Subreddit
-	ago := feedShortTimeAgo(post.CreatedUTC)
-	meta := fmt.Sprintf("%s  %d ^  %d comments  %s", sub, post.Score, post.NumComments, ago)
-
-	content := titleStyle.Render(title) + "\n" + dimStyle.Render(meta)
-
-	border := lipgloss.RoundedBorder()
-	borderColor := ColorBorder
-	if selected {
-		borderColor = lipgloss.Color("11") // bright yellow
-	}
-
-	card := lipgloss.NewStyle().
-		Border(border).
-		BorderForeground(borderColor).
-		Padding(0, 1).
-		Width(f.width - 4).
-		Render(content)
-
-	if selected {
-		cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Render("▸ ")
-		return cursor + card
-	}
-	return "  " + card
 }
 
 func (f FeedView) renderCard(post reddit.Post, selected bool) string {
@@ -412,29 +356,20 @@ func (f FeedView) updateComments(msg tea.Msg) (FeedView, tea.Cmd) {
 func (f *FeedView) ensureVisible() {
 	if f.cursor < f.scroll {
 		f.scroll = f.cursor
+		return
 	}
-	// Check if cursor is past the visible area by measuring rendered heights
+	// Measure actual rendered card heights to see if cursor is visible
 	contentH := f.height - 4
 	used := 0
-	for i := f.scroll; i < len(f.posts); i++ {
-		cardH := 4 // compact estimate
-		if f.posts[i].HasImage {
-			if f.client != nil {
-				if thumb, ok := f.client.GetThumb(f.posts[i].ID); ok && thumb != "" {
-					cardH = strings.Count(thumb, "\n") + 5 // thumb lines + title/meta/border
-				} else {
-					cardH = 4
-				}
-			}
-		}
-		if i == f.cursor && used+cardH > contentH {
-			// Cursor card won't fit — scroll down
-			f.scroll = f.cursor
-			return
-		}
+	for i := f.scroll; i <= f.cursor && i < len(f.posts); i++ {
+		card := f.renderCard(f.posts[i], i == f.cursor)
+		cardH := strings.Count(card, "\n") + 1
 		used += cardH
-		if i >= f.cursor {
-			return // cursor is visible
+		if used > contentH && i <= f.cursor {
+			// Cursor card doesn't fit — advance scroll
+			f.scroll++
+			f.ensureVisible() // recalculate
+			return
 		}
 	}
 }
