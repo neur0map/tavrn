@@ -7,8 +7,10 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -29,6 +31,13 @@ type Client struct {
 	http     *http.Client
 	cacheTTL time.Duration
 
+	// OAuth credentials (optional — falls back to public JSON API)
+	clientID     string
+	clientSecret string
+	tokenMu      sync.Mutex
+	accessToken  string
+	tokenExpiry  time.Time
+
 	mu        sync.RWMutex
 	postCache []Post
 	cacheTime time.Time
@@ -40,14 +49,90 @@ type Client struct {
 }
 
 // NewClient creates a Reddit client with 24h cache TTL and 10s HTTP timeout.
-func NewClient() *Client {
-	return &Client{
+// If clientID and clientSecret are provided, uses OAuth (oauth.reddit.com)
+// which is more reliable from cloud servers. Otherwise falls back to
+// the public JSON API (www.reddit.com) which may get 403 on some IPs.
+func NewClient(clientID ...string) *Client {
+	c := &Client{
 		http: &http.Client{
 			Timeout: httpTimeout,
 		},
 		cacheTTL:   defaultCacheTTL,
 		thumbCache: make(map[string]string),
 	}
+	if len(clientID) >= 2 && clientID[0] != "" && clientID[1] != "" {
+		c.clientID = clientID[0]
+		c.clientSecret = clientID[1]
+		log.Printf("reddit: using OAuth (client ID: %s...)", c.clientID[:8])
+	}
+	return c
+}
+
+// getToken returns a valid OAuth access token, refreshing if needed.
+func (c *Client) getToken() (string, error) {
+	c.tokenMu.Lock()
+	defer c.tokenMu.Unlock()
+
+	if c.accessToken != "" && time.Now().Before(c.tokenExpiry) {
+		return c.accessToken, nil
+	}
+
+	data := url.Values{"grant_type": {"client_credentials"}}
+	req, err := http.NewRequest("POST", "https://www.reddit.com/api/v1/access_token", strings.NewReader(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(c.clientID, c.clientSecret)
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("reddit oauth: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var tok struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		Error       string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tok); err != nil {
+		return "", fmt.Errorf("reddit oauth decode: %w", err)
+	}
+	if tok.Error != "" {
+		return "", fmt.Errorf("reddit oauth: %s", tok.Error)
+	}
+
+	c.accessToken = tok.AccessToken
+	c.tokenExpiry = time.Now().Add(time.Duration(tok.ExpiresIn-60) * time.Second)
+	return c.accessToken, nil
+}
+
+// useOAuth returns true if OAuth credentials are configured.
+func (c *Client) useOAuth() bool {
+	return c.clientID != "" && c.clientSecret != ""
+}
+
+// apiBase returns the base URL — oauth.reddit.com with OAuth, www.reddit.com without.
+func (c *Client) apiBase() string {
+	if c.useOAuth() {
+		return "https://oauth.reddit.com"
+	}
+	return "https://www.reddit.com"
+}
+
+// setAuth sets the appropriate auth headers on a request.
+func (c *Client) setAuth(req *http.Request) error {
+	req.Header.Set("User-Agent", userAgent)
+	if c.useOAuth() {
+		token, err := c.getToken()
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return nil
 }
 
 // GetThumb returns the cached rendered thumbnail for a post.
@@ -80,13 +165,15 @@ func (c *Client) MarkThumbLoading(postID string) bool {
 
 // FetchSubreddit fetches hot posts from a single subreddit.
 func (c *Client) FetchSubreddit(subreddit string, limit int) ([]Post, error) {
-	url := fmt.Sprintf("https://www.reddit.com/r/%s/hot.json?limit=%d&raw_json=1", subreddit, limit)
+	u := fmt.Sprintf("%s/r/%s/hot.json?limit=%d&raw_json=1", c.apiBase(), subreddit, limit)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, fmt.Errorf("reddit: build request: %w", err)
 	}
-	req.Header.Set("User-Agent", userAgent)
+	if err := c.setAuth(req); err != nil {
+		return nil, fmt.Errorf("reddit: auth: %w", err)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -207,16 +294,18 @@ func (c *Client) CacheAge() time.Duration {
 
 // FetchComments fetches comments for a post, parsing nested replies up to depth 2.
 func (c *Client) FetchComments(subreddit, postID string, limit int) ([]Comment, error) {
-	url := fmt.Sprintf(
-		"https://www.reddit.com/r/%s/comments/%s.json?raw_json=1&limit=%d&depth=3",
-		subreddit, postID, limit,
+	u := fmt.Sprintf(
+		"%s/r/%s/comments/%s.json?raw_json=1&limit=%d&depth=3",
+		c.apiBase(), subreddit, postID, limit,
 	)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, fmt.Errorf("reddit: build comment request: %w", err)
 	}
-	req.Header.Set("User-Agent", userAgent)
+	if err := c.setAuth(req); err != nil {
+		return nil, fmt.Errorf("reddit: auth: %w", err)
+	}
 
 	resp, err := c.http.Do(req)
 	if err != nil {

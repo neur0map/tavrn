@@ -566,7 +566,8 @@ func runServer() {
 	}
 
 	// Reddit feed client (always created — subreddits can be added via --feed-add)
-	redditClient := reddit.NewClient()
+	// OAuth credentials avoid 403 blocks on cloud server IPs
+	redditClient := reddit.NewClient(os.Getenv("REDDIT_CLIENT_ID"), os.Getenv("REDDIT_CLIENT_SECRET"))
 	feedSubs := st.FeedSubreddits()
 	if len(feedSubs) > 0 {
 		log.Printf("reddit feed: enabled (%d subreddits)", len(feedSubs))
