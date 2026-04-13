@@ -565,11 +565,10 @@ func runServer() {
 		log.Println("gif search: disabled (no KLIPY_API_KEY)")
 	}
 
-	// Reddit feed client
-	var redditClient *reddit.Client
+	// Reddit feed client (always created — subreddits can be added via --feed-add)
+	redditClient := reddit.NewClient()
 	feedSubs := st.FeedSubreddits()
 	if len(feedSubs) > 0 {
-		redditClient = reddit.NewClient()
 		log.Printf("reddit feed: enabled (%d subreddits)", len(feedSubs))
 		go redditClient.FetchMerged(feedSubs, 25)
 	} else {

@@ -19,20 +19,20 @@ const (
 )
 
 type FeedView struct {
-	state    feedState
-	posts    []reddit.Post
-	cursor   int
-	scroll   int
-	width    int
-	height   int
-	viewport viewport.Model
+	state  feedState
+	posts  []reddit.Post
+	cursor int
+	scroll int
+	width  int
+	height int
+
+	// Shared reddit client (server-wide thumbnail cache lives here)
+	client *reddit.Client
 
 	// Comment view
+	viewport    viewport.Model
 	comments    []reddit.Comment
 	commentPost *reddit.Post
-
-	// Rendered thumbnail cache: post ID -> rendered string
-	thumbCache map[string]string
 
 	// Loading state
 	loading        bool
@@ -40,12 +40,12 @@ type FeedView struct {
 	lastUpdate     time.Time
 }
 
-func NewFeedView() FeedView {
+func NewFeedView(client *reddit.Client) FeedView {
 	vp := viewport.New(viewport.WithWidth(40), viewport.WithHeight(20))
 	return FeedView{
-		state:      feedStateList,
-		thumbCache: make(map[string]string),
-		viewport:   vp,
+		state:    feedStateList,
+		client:   client,
+		viewport: vp,
 	}
 }
 
@@ -70,10 +70,6 @@ func (f *FeedView) SetComments(comments []reddit.Comment, post *reddit.Post) {
 	f.renderCommentView()
 }
 
-func (f *FeedView) SetThumbnail(postID, rendered string) {
-	f.thumbCache[postID] = rendered
-}
-
 func (f *FeedView) SelectedPost() *reddit.Post {
 	if f.cursor >= 0 && f.cursor < len(f.posts) {
 		return &f.posts[f.cursor]
@@ -89,6 +85,23 @@ func (f *FeedView) BackToList() {
 	f.state = feedStateList
 	f.comments = nil
 	f.commentPost = nil
+}
+
+// NextThumbToLoad returns the first visible post that needs a thumbnail loaded.
+// Returns nil if nothing needs loading.
+func (f *FeedView) NextThumbToLoad() *reddit.Post {
+	if f.client == nil {
+		return nil
+	}
+	for i := f.scroll; i < len(f.posts) && i < f.scroll+10; i++ {
+		p := f.posts[i]
+		if p.HasImage && p.PreviewURL != "" {
+			if _, ok := f.client.GetThumb(p.ID); !ok {
+				return &f.posts[i]
+			}
+		}
+	}
+	return nil
 }
 
 // View renders the feed panel.
@@ -137,11 +150,12 @@ func (f FeedView) viewList() string {
 			usedLines += cardLines
 		} else {
 			row := f.renderCompact(post, selected)
-			if usedLines+1 > contentH {
+			rowLines := strings.Count(row, "\n") + 1
+			if usedLines+rowLines > contentH {
 				break
 			}
 			lines = append(lines, row)
-			usedLines++
+			usedLines += rowLines
 		}
 	}
 
@@ -153,104 +167,88 @@ func (f FeedView) viewList() string {
 }
 
 func (f FeedView) renderCompact(post reddit.Post, selected bool) string {
-	w := f.width - 6
-
-	score := fmt.Sprintf("%4d", post.Score)
-	sub := "r/" + post.Subreddit
-	ago := feedShortTimeAgo(post.CreatedUTC)
-
-	right := sub + "  " + ago
-	titleW := w - len(score) - len(right) - 6
-	if titleW < 10 {
-		titleW = 10
-	}
-	title := post.Title
-	if len(title) > titleW {
-		title = title[:titleW-3] + "..."
+	cardW := f.width - 4
+	if cardW < 20 {
+		cardW = 20
 	}
 
-	scoreStyle := lipgloss.NewStyle().Foreground(ColorAccent)
-	dimStyle := lipgloss.NewStyle().Foreground(ColorDim)
 	titleStyle := lipgloss.NewStyle()
+	dimStyle := lipgloss.NewStyle().Foreground(ColorDim)
 
 	if selected {
 		titleStyle = titleStyle.Bold(true).Foreground(lipgloss.Color("15"))
-		scoreStyle = scoreStyle.Bold(true)
 	}
 
-	padding := titleW - len(title)
-	if padding < 1 {
-		padding = 1
-	}
-
-	row := scoreStyle.Render(score+" ^") + "  " +
-		titleStyle.Render(title) +
-		strings.Repeat(" ", padding) +
-		dimStyle.Render(right)
-
-	if selected {
-		return lipgloss.NewStyle().
-			Background(lipgloss.Color("236")).
-			Width(w).
-			Render(row)
-	}
-	return row
-}
-
-func (f FeedView) renderCard(post reddit.Post, selected bool) string {
-	thumbW := 12
-	thumb, hasThumb := f.thumbCache[post.ID]
-
-	titleW := f.width - thumbW - 8
-	if titleW < 10 {
-		titleW = 10
-	}
 	title := post.Title
-	if len(title) > titleW*2 {
-		title = title[:titleW*2-3] + "..."
+	titleW := cardW - 4
+	if len(title) > titleW {
+		title = title[:titleW-3] + "..."
 	}
-
-	titleLines := feedWrapText(title, titleW)
 
 	sub := "r/" + post.Subreddit
 	ago := feedShortTimeAgo(post.CreatedUTC)
 	meta := fmt.Sprintf("%s  %d ^  %d comments  %s", sub, post.Score, post.NumComments, ago)
 
+	content := titleStyle.Render(title) + "\n" + dimStyle.Render(meta)
+
+	border := lipgloss.RoundedBorder()
+	borderColor := ColorBorder
+	if selected {
+		borderColor = ColorAccent
+	}
+
+	return lipgloss.NewStyle().
+		Border(border).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Width(f.width - 2).
+		Render(content)
+}
+
+func (f FeedView) renderCard(post reddit.Post, selected bool) string {
+	cardW := f.width - 4 // border + padding
+	if cardW < 20 {
+		cardW = 20
+	}
+
 	dimStyle := lipgloss.NewStyle().Foreground(ColorDim)
-	accentStyle := lipgloss.NewStyle().Foreground(ColorAccent)
+	titleStyle := lipgloss.NewStyle()
+	if selected {
+		titleStyle = titleStyle.Bold(true).Foreground(lipgloss.Color("15"))
+	}
 
-	var textLines []string
+	// Title
+	title := post.Title
+	if len(title) > cardW*2 {
+		title = title[:cardW*2-3] + "..."
+	}
+	titleLines := feedWrapText(title, cardW)
+
+	// Meta line
+	sub := "r/" + post.Subreddit
+	ago := feedShortTimeAgo(post.CreatedUTC)
+	meta := fmt.Sprintf("%s  %d ^  %d comments  %s", sub, post.Score, post.NumComments, ago)
+
+	// Build card content: image on top (full width), then title, then meta
+	var parts []string
+
+	// Image — full width of the card
+	if f.client != nil {
+		thumb, ok := f.client.GetThumb(post.ID)
+		if ok && thumb != "" {
+			parts = append(parts, thumb)
+		}
+	}
+
+	// Title
 	for _, line := range titleLines {
-		textLines = append(textLines, line)
+		parts = append(parts, titleStyle.Render(line))
 	}
-	textLines = append(textLines, dimStyle.Render(meta))
 
-	var content string
-	if hasThumb && thumb != "" {
-		thumbLines := strings.Split(thumb, "\n")
-		maxLines := len(thumbLines)
-		if len(textLines) > maxLines {
-			maxLines = len(textLines)
-		}
-		var rows []string
-		for i := 0; i < maxLines; i++ {
-			tl := ""
-			if i < len(thumbLines) {
-				tl = thumbLines[i]
-			} else {
-				tl = strings.Repeat(" ", thumbW)
-			}
-			txt := ""
-			if i < len(textLines) {
-				txt = textLines[i]
-			}
-			rows = append(rows, tl+"  "+txt)
-		}
-		content = strings.Join(rows, "\n")
-	} else {
-		placeholder := accentStyle.Render("[img]")
-		content = placeholder + "  " + strings.Join(textLines, "\n"+"       ")
-	}
+	// Meta
+	parts = append(parts, dimStyle.Render(meta))
+
+	content := strings.Join(parts, "\n")
 
 	border := lipgloss.RoundedBorder()
 	borderColor := ColorBorder
@@ -406,9 +404,9 @@ func (f FeedView) visibleCount() int {
 	used := 0
 	for i := f.scroll; i < len(f.posts) && used < h; i++ {
 		if f.posts[i].HasImage {
-			used += 5
+			used += 8 // image card takes more space
 		} else {
-			used++
+			used += 4 // compact card with border
 		}
 		count++
 	}

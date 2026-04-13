@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultCacheTTL = 5 * time.Minute
+	defaultCacheTTL = 24 * time.Hour
 	httpTimeout     = 10 * time.Second
 	userAgent       = "tavrn:v0.2 (terminal client)"
 	maxImageBytes   = 2 * 1024 * 1024 // 2MB
@@ -24,6 +24,7 @@ const (
 )
 
 // Client is a Reddit API client with caching.
+// Shared across all SSH sessions — post and thumbnail caches are server-wide.
 type Client struct {
 	http     *http.Client
 	cacheTTL time.Duration
@@ -31,16 +32,50 @@ type Client struct {
 	mu        sync.RWMutex
 	postCache []Post
 	cacheTime time.Time
+
+	// Server-shared rendered thumbnail cache: post ID → ANSI string.
+	// First user to view a post triggers the render; everyone else gets cache.
+	thumbMu    sync.RWMutex
+	thumbCache map[string]string // "" = loading, non-empty = rendered
 }
 
-// NewClient creates a Reddit client with 5min cache TTL and 10s HTTP timeout.
+// NewClient creates a Reddit client with 24h cache TTL and 10s HTTP timeout.
 func NewClient() *Client {
 	return &Client{
 		http: &http.Client{
 			Timeout: httpTimeout,
 		},
-		cacheTTL: defaultCacheTTL,
+		cacheTTL:   defaultCacheTTL,
+		thumbCache: make(map[string]string),
 	}
+}
+
+// GetThumb returns the cached rendered thumbnail for a post.
+// Returns (rendered, true) if cached and rendered, ("", true) if loading, ("", false) if not started.
+func (c *Client) GetThumb(postID string) (string, bool) {
+	c.thumbMu.RLock()
+	defer c.thumbMu.RUnlock()
+	v, ok := c.thumbCache[postID]
+	return v, ok
+}
+
+// SetThumb stores a rendered thumbnail in the server-wide cache.
+func (c *Client) SetThumb(postID, rendered string) {
+	c.thumbMu.Lock()
+	defer c.thumbMu.Unlock()
+	c.thumbCache[postID] = rendered
+}
+
+// MarkThumbLoading marks a thumbnail as loading to prevent duplicate fetches.
+// Returns true if this call claimed the load (wasn't already started).
+func (c *Client) MarkThumbLoading(postID string) bool {
+	c.thumbMu.Lock()
+	defer c.thumbMu.Unlock()
+	if _, ok := c.thumbCache[postID]; ok {
+		return false // already loading or done
+	}
+	c.thumbCache[postID] = "" // mark loading
+	return true
 }
 
 // FetchSubreddit fetches hot posts from a single subreddit.
