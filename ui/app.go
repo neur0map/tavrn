@@ -666,16 +666,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 		case "tab":
-			// When feed is active, Tab switches focus between feed and chat
-			if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode {
-				a.feedFocused = !a.feedFocused
-				if !a.feedFocused {
-					a.chat.input.Focus()
-				} else {
-					a.chat.input.Blur()
-				}
-				return a, nil
-			}
 			// Toggle DM mode only when input is empty and not in gallery/games
 			if a.dmStore != nil && !a.chat.HasInput() &&
 				a.roomTypes[a.session.Room] != "gallery" &&
@@ -1037,13 +1027,10 @@ func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
 
 func (a App) loadThumbnail(postID, previewURL string) tea.Cmd {
 	rc := a.redditClient
-	// Render at feed panel width minus card border/padding
-	thumbW := a.feed.width - 6
+	// Render at feed panel width minus card border/padding/cursor
+	thumbW := a.feed.width - 8
 	if thumbW < 20 {
 		thumbW = 20
-	}
-	if thumbW > 90 {
-		thumbW = 90
 	}
 	return func() tea.Msg {
 		img, err := rc.FetchImage(previewURL)
@@ -1780,19 +1767,13 @@ func (a *App) doLayout() {
 		chatWidth = a.width
 	}
 
-	// When feed is active, hide the online sidebar and reclaim the space
+	// When feed is active, take the entire screen
 	feedWidth := 0
 	if a.feedActive && a.session.Room == a.firstRoom {
-		chatWidth = chatWidth + onlineWidth // reclaim online sidebar space
+		roomsWidth = 0
 		onlineWidth = 0
-		feedWidth = chatWidth * 2 / 3
-		if feedWidth < 30 {
-			feedWidth = 30
-		}
-		if feedWidth > chatWidth-25 {
-			feedWidth = chatWidth - 25
-		}
-		chatWidth = chatWidth - feedWidth
+		feedWidth = a.width
+		chatWidth = 0
 	}
 
 	a.chatWidth = chatWidth
@@ -1914,9 +1895,7 @@ func (a App) View() tea.View {
 		centerView = header + a.chat.View()
 	} else {
 		if a.feedActive && a.session.Room == a.firstRoom {
-			feedView := a.feed.View()
-			chatView := a.chat.View()
-			centerView = lipgloss.JoinHorizontal(lipgloss.Top, feedView, chatView)
+			centerView = a.feed.View()
 		} else {
 			centerView = a.chat.View()
 		}
