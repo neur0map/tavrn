@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	defaultCacheTTL = 24 * time.Hour
+	defaultCacheTTL = 1 * time.Hour
 	httpTimeout     = 10 * time.Second
 	userAgent       = "tavrn:v0.5 (terminal tavern, github.com/neur0map/tavrn)"
 	maxImageBytes   = 2 * 1024 * 1024 // 2MB
@@ -203,35 +203,34 @@ func (c *Client) FetchSubreddit(subreddit string, limit int) ([]Post, error) {
 	return posts, nil
 }
 
-// FetchMerged fetches from multiple subreddits concurrently, deduplicates,
-// sorts by score descending, caches the result, and caps at 100 posts.
+// FetchMerged fetches from multiple subreddits sequentially with a delay
+// between each to avoid rate limits. New posts are merged into the existing
+// cache (deduped by ID), sorted by score, and capped at 100.
 func (c *Client) FetchMerged(subreddits []string, perSub int) ([]Post, error) {
-	type result struct {
-		posts []Post
-		err   error
-	}
-
-	ch := make(chan result, len(subreddits))
-	for _, sub := range subreddits {
-		go func(s string) {
-			posts, err := c.FetchSubreddit(s, perSub)
-			ch <- result{posts, err}
-		}(sub)
-	}
-
+	// Start with existing cached posts
+	c.mu.RLock()
 	seen := make(map[string]bool)
 	var merged []Post
-	var firstErr error
+	for _, p := range c.postCache {
+		seen[p.ID] = true
+		merged = append(merged, p)
+	}
+	c.mu.RUnlock()
 
-	for range subreddits {
-		r := <-ch
-		if r.err != nil {
+	var firstErr error
+	for i, sub := range subreddits {
+		if i > 0 {
+			time.Sleep(2 * time.Second) // stagger requests
+		}
+		posts, err := c.FetchSubreddit(sub, perSub)
+		if err != nil {
+			log.Printf("reddit: r/%s failed: %v", sub, err)
 			if firstErr == nil {
-				firstErr = r.err
+				firstErr = err
 			}
 			continue
 		}
-		for _, p := range r.posts {
+		for _, p := range posts {
 			if !seen[p.ID] {
 				seen[p.ID] = true
 				merged = append(merged, p)
@@ -239,7 +238,7 @@ func (c *Client) FetchMerged(subreddits []string, perSub int) ([]Post, error) {
 		}
 	}
 
-	// If we got no posts at all, return the first error we saw.
+	// If we got no posts at all (including from cache), return the first error.
 	if len(merged) == 0 && firstErr != nil {
 		return nil, firstErr
 	}
