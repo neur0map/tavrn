@@ -34,6 +34,7 @@ type FeedView struct {
 	// Loading state
 	loading        bool
 	loadingComment bool
+	loadError      string
 	lastUpdate     time.Time
 
 	// Temporary notice (e.g. "Link copied!")
@@ -60,6 +61,12 @@ func (f *FeedView) SetPosts(posts []reddit.Post) {
 	f.posts = posts
 	f.lastUpdate = time.Now()
 	f.loading = false
+	f.loadError = ""
+}
+
+func (f *FeedView) SetError(msg string) {
+	f.loading = false
+	f.loadError = msg
 }
 
 func (f *FeedView) SetComments(comments []reddit.Comment, post *reddit.Post) {
@@ -112,6 +119,9 @@ func (f FeedView) View() string {
 func (f FeedView) viewList() string {
 	if f.loading {
 		return f.centeredText("Loading feed...")
+	}
+	if f.loadError != "" {
+		return f.centeredText("Feed unavailable — " + f.loadError)
 	}
 	if len(f.posts) == 0 {
 		return f.centeredText("No posts yet")

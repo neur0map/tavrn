@@ -18,7 +18,7 @@ import (
 const (
 	defaultCacheTTL = 24 * time.Hour
 	httpTimeout     = 10 * time.Second
-	userAgent       = "tavrn:v0.2 (terminal client)"
+	userAgent       = "tavrn:v0.5 (terminal tavern, github.com/neur0map/tavrn)"
 	maxImageBytes   = 2 * 1024 * 1024 // 2MB
 	maxPosts        = 100
 )

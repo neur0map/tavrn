@@ -36,6 +36,7 @@ type feedCommentsMsg struct {
 
 type feedPostsMsg struct {
 	posts []reddit.Post
+	err   error
 }
 
 type appState int
@@ -245,7 +246,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.feed.SetComments(msg.comments, msg.post)
 		return a, nil
 	case feedPostsMsg:
-		a.feed.SetPosts(msg.posts)
+		if msg.err != nil && len(msg.posts) == 0 {
+			a.feed.SetError(msg.err.Error())
+		} else {
+			a.feed.SetPosts(msg.posts)
+		}
 		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
@@ -631,13 +636,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.doLayout()
 				if a.feedActive && len(a.feed.posts) == 0 {
-					a.feed.loading = true
 					subs := a.store.FeedSubreddits()
 					if len(subs) > 0 {
+						a.feed.loading = true
 						rc := a.redditClient
 						return a, func() tea.Msg {
-							posts, _ := rc.FetchMerged(subs, 25)
-							return feedPostsMsg{posts: posts}
+							posts, err := rc.FetchMerged(subs, 25)
+							return feedPostsMsg{posts: posts, err: err}
 						}
 					}
 				}
