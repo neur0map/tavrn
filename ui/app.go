@@ -298,12 +298,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					a.feed.SetPosts(posts)
 				}
 			}
-			// Lazy-load one thumbnail at a time for visible feed posts
+			// Load thumbnails for visible feed posts (up to 3 concurrent)
 			if a.feedActive && a.redditClient != nil {
-				if p := a.feed.NextThumbToLoad(); p != nil {
-					if a.redditClient.MarkThumbLoading(p.ID) {
-						return a, tea.Batch(doTick(a.nextTickInterval()), a.loadThumbnail(p.ID, p.PreviewURL))
+				var thumbCmds []tea.Cmd
+				for i := 0; i < 3; i++ {
+					p := a.feed.NextThumbToLoad()
+					if p == nil {
+						break
 					}
+					if a.redditClient.MarkThumbLoading(p.ID) {
+						thumbCmds = append(thumbCmds, a.loadThumbnail(p.ID, p.PreviewURL))
+					}
+				}
+				if len(thumbCmds) > 0 {
+					thumbCmds = append(thumbCmds, doTick(a.nextTickInterval()))
+					return a, tea.Batch(thumbCmds...)
 				}
 			}
 		}
