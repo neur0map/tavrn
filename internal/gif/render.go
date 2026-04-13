@@ -49,14 +49,15 @@ func RenderHalfBlocks(img image.Image, width int) string {
 func RenderHalfBlocksClean(img image.Image, width int) string {
 	bounds := img.Bounds()
 	aspect := float64(bounds.Dy()) / float64(bounds.Dx())
-	height := int(float64(width) * aspect * 0.5)
+	height := int(float64(width) * aspect)
 	if height%2 != 0 {
 		height++
 	}
 	if height < 2 {
 		height = 2
 	}
-	maxHeight := width
+	// Cap at 2x width to prevent absurdly tall portrait renders
+	maxHeight := width * 2
 	if height > maxHeight {
 		height = maxHeight
 		if height%2 != 0 {
