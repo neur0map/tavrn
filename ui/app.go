@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"log"
 	"math"
 	"sort"
 	"strings"
@@ -636,13 +637,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				a.doLayout()
 				if a.feedActive && len(a.feed.posts) == 0 {
-					subs := a.store.FeedSubreddits()
-					if len(subs) > 0 {
-						a.feed.loading = true
-						rc := a.redditClient
-						return a, func() tea.Msg {
-							posts, err := rc.FetchMerged(subs, 25)
-							return feedPostsMsg{posts: posts, err: err}
+					// Check if the background fetch already cached posts
+					if cached, _ := a.redditClient.Posts(); len(cached) > 0 {
+						a.feed.SetPosts(cached)
+					} else {
+						subs := a.store.FeedSubreddits()
+						if len(subs) > 0 {
+							a.feed.loading = true
+							rc := a.redditClient
+							log.Printf("reddit feed: fetching %d subs: %v", len(subs), subs)
+							return a, func() tea.Msg {
+								posts, err := rc.FetchMerged(subs, 25)
+								if err != nil {
+									log.Printf("reddit feed: fetch error: %v", err)
+								} else {
+									log.Printf("reddit feed: got %d posts", len(posts))
+								}
+								return feedPostsMsg{posts: posts, err: err}
+							}
+						} else {
+							log.Println("reddit feed: no subreddits in database")
 						}
 					}
 				}
