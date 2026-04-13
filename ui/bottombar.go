@@ -53,13 +53,13 @@ func (b BottomBar) View() string {
 		content = "  " +
 			k.Render("↑↓") + " " + d.Render("navigate posts") + sep +
 			k.Render("ENTER") + " " + d.Render("open") + sep +
-			k.Render("o") + " " + d.Render("copy link") + sep +
+			k.Render("`") + " " + d.Render("copy link") + sep +
 			k.Render("ESC") + " " + d.Render("back")
 	} else if b.IsFeed {
 		content = "  " +
 			k.Render("j/k") + " " + d.Render("scroll") + sep +
 			k.Render("ENTER") + " " + d.Render("comments") + sep +
-			k.Render("o") + " " + d.Render("copy link") + sep +
+			k.Render("`") + " " + d.Render("copy link") + sep +
 			k.Render("s") + " " + d.Render("share") + sep +
 			k.Render("S-TAB") + " " + d.Render("back")
 	} else {
@@ -75,7 +75,7 @@ func (b BottomBar) View() string {
 			f4 + sep +
 			tabDM + sep +
 			k.Render("S-TAB") + " " + d.Render("feed") + sep +
-			k.Render("o") + " " + d.Render("posts")
+			k.Render("`") + " " + d.Render("posts")
 	}
 
 	return BottomBarStyle.Width(b.Width).MaxWidth(b.Width).Render(content)

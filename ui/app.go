@@ -811,13 +811,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if post != nil {
 					return a.shareFeedPost(post)
 				}
-			case "o":
+			case "`":
 				// Copy link works in both list and comment view
 				if post != nil {
-					url := post.URL
-					if post.IsSelf {
-						url = "https://reddit.com" + post.Permalink
-					}
+					url := "https://reddit.com" + post.Permalink
 					a.feed.ShowNotice("Link copied!")
 					return a, tea.SetClipboard(url)
 				}
@@ -889,7 +886,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return a, nil
-			case "o":
+			case "`":
 				// Copy link of focused post
 				if a.redditFocusIdx < len(a.redditFocusMsgs) {
 					msgIdx := a.redditFocusMsgs[a.redditFocusIdx]
@@ -913,7 +910,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
-		case "o":
+		case "`":
 			// Enter reddit focus mode if there are shared posts and no input
 			if !a.chat.HasInput() {
 				indices := a.findRedditMessages()
@@ -1075,6 +1072,7 @@ func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	a.lastShareAt = time.Now()
+	a.feed.ShowNotice("Post shared!")
 	a.onSend(session.Msg{
 		Type:           session.MsgRedditShare,
 		Nickname:       a.session.Nickname,
@@ -1774,6 +1772,21 @@ func (a *App) switchRoom(target string) {
 						continue
 					}
 				}
+			}
+			if m.RedditURL != "" {
+				a.chat.AddMessage(chat.Message{
+					Nickname:       m.Nickname,
+					ColorIndex:     m.ColorIndex,
+					Room:           m.Room,
+					Timestamp:      m.CreatedAt,
+					IsReddit:       true,
+					RedditTitle:    m.RedditTitle,
+					RedditSub:      m.RedditSub,
+					RedditScore:    m.RedditScore,
+					RedditComments: m.RedditComments,
+					RedditURL:      m.RedditURL,
+				})
+				continue
 			}
 			msg := chat.Message{
 				Nickname:   m.Nickname,

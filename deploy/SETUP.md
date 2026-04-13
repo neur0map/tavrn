@@ -60,18 +60,54 @@ su - tavrn -c "
 su - tavrn -c "
   cd ~/tavrn
   cp tavern.yaml.example tavern.yaml
-  # edit tavern.yaml: set your tavern name, domain, owner fingerprint
 "
-
-# set up environment variables
-cat > /etc/tavrn/env << 'EOF'
-OPENAI_API_KEY=
-KLIPY_API_KEY=
-EXA_API_KEY=
-EOF
 ```
 
-Find your SSH fingerprint: `ssh-keygen -lf ~/.ssh/id_ed25519.pub`
+Edit `tavern.yaml` with your values:
+
+```yaml
+tavern:
+  name: "My Tavern"
+  domain: "mytavern.example"
+
+owner:
+  name: "yourname"           # Your reserved nickname (shown with a star)
+  fingerprint: "SHA256:..."  # Your SSH public key fingerprint
+```
+
+### Finding your SSH key fingerprint
+
+On your **local machine** (not the server), run:
+
+```bash
+ssh-keygen -lf ~/.ssh/id_ed25519.pub
+# or for RSA keys:
+ssh-keygen -lf ~/.ssh/id_rsa.pub
+```
+
+Output looks like:
+
+```
+256 SHA256:abc123def456... user@host (ED25519)
+```
+
+Copy the `SHA256:abc123def456...` part into the `fingerprint` field in `tavern.yaml`.
+
+This fingerprint is how the server identifies you as the owner when you connect via SSH. The owner gets:
+- A star flair next to their nickname
+- Access to admin chat commands (`/addroom`, `/renameroom`, `/ban`, etc.)
+- The bartender recognizes you as the boss
+
+### Environment variables
+
+```bash
+mkdir -p /etc/tavrn
+cat > /etc/tavrn/env << 'EOF'
+OPENAI_API_KEY=         # Required for bartender (GPT-powered)
+KLIPY_API_KEY=          # Required for /gif search
+EXA_API_KEY=            # Optional — bartender web search context
+EOF
+```
 
 ---
 

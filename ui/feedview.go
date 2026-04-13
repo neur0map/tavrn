@@ -273,7 +273,7 @@ func (f *FeedView) renderCommentView() {
 	}
 	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 	b.WriteString(linkStyle.Render(url))
-	b.WriteString("\n")
+	b.WriteString("\n\n")
 	b.WriteString(dimStyle.Render(strings.Repeat("─", f.width-4)))
 	b.WriteString("\n")
 
@@ -283,6 +283,7 @@ func (f *FeedView) renderCommentView() {
 			b.WriteString("  " + line)
 			b.WriteString("\n")
 		}
+		b.WriteString("\n")
 	}
 
 	// Comments header — clear separator
@@ -336,9 +337,16 @@ func (f FeedView) viewComments() string {
 		return f.centeredText("Loading comments...")
 	}
 
+	headerText := "ESC back  |  s share"
 	header := lipgloss.NewStyle().
 		Foreground(ColorDim).
-		Render("ESC back  |  s share")
+		Render(headerText)
+
+	// Show temporary notice (fades after 2s)
+	if f.notice != "" && time.Since(f.noticeAt) < 2*time.Second {
+		notice := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render(f.notice)
+		header += "  " + notice
+	}
 
 	return header + "\n" + f.viewport.View()
 }

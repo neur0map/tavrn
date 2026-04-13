@@ -89,7 +89,7 @@ func (h HelpModal) View(width, height int) string {
 		{"F7", "leaderboard"},
 		{"TAB", "toggle DMs"},
 		{"SHIFT+TAB", "reddit feed"},
-		{"o", "focus shared posts"},
+		{"`", "focus shared posts"},
 		{"ESC", "close modal / unfocus"},
 		{"SHIFT+arrows", "scroll chat"},
 	}
@@ -133,7 +133,7 @@ func (h HelpModal) View(width, height int) string {
 	fkeys := []struct{ k, d string }{
 		{"j/k or arrows", "scroll posts"},
 		{"ENTER", "open comments"},
-		{"o", "copy link to clipboard"},
+		{"`", "copy link to clipboard"},
 		{"s", "share post to chat"},
 		{"ESC", "back to list"},
 		{"SHIFT+TAB", "close feed"},
@@ -146,10 +146,10 @@ func (h HelpModal) View(width, height int) string {
 	b.WriteString(cat.Render("POST FOCUS (in chat)"))
 	b.WriteString("\n")
 	pkeys := []struct{ k, d string }{
-		{"o", "enter post focus"},
+		{"`", "enter post focus"},
 		{"arrows", "navigate posts"},
 		{"ENTER", "open in feed"},
-		{"o", "copy link"},
+		{"`", "copy link"},
 		{"ESC", "exit focus"},
 	}
 	for _, k := range pkeys {

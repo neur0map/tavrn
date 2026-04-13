@@ -66,15 +66,43 @@ ui/
 
 ## Admin commands
 
+All commands are run via the server binary (`tavrn-admin` or `go run ./cmd/tavrn-admin`):
+
 ```bash
-# Send banner to all connected users (server-side only)
-./tavrn-admin --message "Maintenance in 10 minutes"
+# Server
+tavrn-admin                              # Start the SSH server
+tavrn-admin --web-audio                  # Start with web audio streaming on :8090
+tavrn-admin --update                     # Pull main, rebuild, restart service
 
-# Purge all data
-./tavrn-admin purge
+# Announcements
+tavrn-admin --message "text"             # Send banner to all connected users
+tavrn-admin --clear-banner               # Clear the active banner
 
-# Update server from main branch
-./tavrn-admin --update
+# Rooms (live, no restart needed)
+tavrn-admin --add-room "name"            # Add a new room
+tavrn-admin --rename-room "old" "new"    # Rename a room
+tavrn-admin --remove-room "name"         # Remove a room (moves users to landing room)
+
+# Moderation
+tavrn-admin --ban "nickname"             # Ban a user by nickname (kicks them)
+tavrn-admin --unban "nickname"           # Unban a user
+tavrn-admin --ban-list                   # Show all active bans
+
+# Bartender
+tavrn-admin --bartender-off              # Disable bartender (live)
+tavrn-admin --bartender-on               # Enable bartender (live)
+
+# Reddit feed
+tavrn-admin --feed-add sub [sub...]      # Add subreddit(s) to feed
+tavrn-admin --feed-remove sub            # Remove a subreddit from feed
+tavrn-admin --feed-list                  # List configured subreddits
+
+# Wargame CTF
+tavrn-admin --set-flag bandit 1 "flag"   # Set a wargame flag
+tavrn-admin --list-flags bandit          # List levels with flags
+
+# Data
+tavrn-admin purge                        # Purge all data (preserves bans and owners)
 ```
 
 ## Tests

@@ -9,6 +9,18 @@ type Entry struct {
 // Changelog lists versions newest-first.
 var Changelog = []Entry{
 	{
+		Version: "0.5",
+		Changes: []string{
+			"reddit feed — browse posts, read comments in-terminal",
+			"share reddit posts to chat, shared posts persist across reconnects",
+			"copy post link to clipboard (` key) uses Reddit permalink, not image URL",
+			"reddit focus mode — navigate shared posts in chat with ` key",
+			"bartender personality overhaul — warm modern pub vibe, no more edgelord",
+			"comment view spacing improvements for readability",
+			"share confirmation notice in feed and comment views",
+		},
+	},
+	{
 		Version: "0.4",
 		Changes: []string{
 			"/gif search — animated GIFs in chat via Klipy API",

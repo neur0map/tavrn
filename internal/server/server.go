@@ -203,6 +203,22 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 				continue
 			}
 		}
+		if m.RedditURL != "" {
+			sess.Send <- session.Msg{
+				Type:           session.MsgRedditShare,
+				Nickname:       m.Nickname,
+				Fingerprint:    m.Fingerprint,
+				ColorIndex:     m.ColorIndex,
+				Room:           m.Room,
+				Timestamp:      m.CreatedAt,
+				RedditTitle:    m.RedditTitle,
+				RedditSub:      m.RedditSub,
+				RedditScore:    m.RedditScore,
+				RedditComments: m.RedditComments,
+				RedditURL:      m.RedditURL,
+			}
+			continue
+		}
 		msgType := session.MsgChat
 		if m.IsSystem {
 			msgType = session.MsgSystem
@@ -276,7 +292,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		case session.MsgGif:
 			s.cfg.Store.SaveMessageWithGif(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false, msg.GifURL)
 		case session.MsgRedditShare:
-			// No DB persistence needed, just broadcast
+			s.cfg.Store.SaveRedditShare(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.RedditURL, msg.RedditTitle, msg.RedditSub, msg.RedditScore, msg.RedditComments)
 		case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
 			s.cfg.Store.SaveMessage(msg.Room, "", "", 0, msg.Text, true)
 		}

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5
+
+- reddit feed — browse posts, read comments in-terminal
+- share reddit posts to chat, shared posts persist across reconnects
+- copy post link to clipboard (` key) uses Reddit permalink, not image URL
+- reddit focus mode — navigate shared posts in chat with ` key
+- bartender personality overhaul — warm modern pub vibe, no more edgelord
+- comment view spacing improvements for readability
+- share confirmation notice in feed and comment views
+
 ## v0.4
 
 - /gif search — animated GIFs in chat via Klipy API

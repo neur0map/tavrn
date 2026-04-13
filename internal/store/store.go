@@ -128,6 +128,12 @@ func (s *Store) migrate() error {
 	}
 	// Add gif_url column to chat_messages if missing (migration).
 	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN gif_url TEXT DEFAULT ''`)
+	// Add reddit columns to chat_messages if missing (migration).
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN reddit_url TEXT DEFAULT ''`)
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN reddit_title TEXT DEFAULT ''`)
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN reddit_sub TEXT DEFAULT ''`)
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN reddit_score INTEGER DEFAULT 0`)
+	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN reddit_comments INTEGER DEFAULT 0`)
 	// Add embedding column to bartender_memories if missing (migration).
 	s.db.Exec(`ALTER TABLE bartender_memories ADD COLUMN embedding TEXT`)
 	s.db.Exec(`CREATE TABLE IF NOT EXISTS feed_subreddits (
@@ -337,14 +343,19 @@ func (s *Store) WeeklyVisitorCount() (int, error) {
 }
 
 type ChatRow struct {
-	Room        string
-	Fingerprint string
-	Nickname    string
-	ColorIndex  int
-	Text        string
-	IsSystem    bool
-	GifURL      string
-	CreatedAt   time.Time
+	Room           string
+	Fingerprint    string
+	Nickname       string
+	ColorIndex     int
+	Text           string
+	IsSystem       bool
+	GifURL         string
+	RedditURL      string
+	RedditTitle    string
+	RedditSub      string
+	RedditScore    int
+	RedditComments int
+	CreatedAt      time.Time
 }
 
 func (s *Store) SaveMessage(room, fingerprint, nickname string, colorIndex int, text string, isSystem bool) error {
@@ -365,9 +376,23 @@ func (s *Store) SaveMessageWithGif(room, fingerprint, nickname string, colorInde
 	return err
 }
 
+func (s *Store) SaveRedditShare(room, fingerprint, nickname string, colorIndex int, redditURL, redditTitle, redditSub string, redditScore, redditComments int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`
+		INSERT INTO chat_messages (room, fingerprint, nickname, color_index, text, is_system, reddit_url, reddit_title, reddit_sub, reddit_score, reddit_comments)
+		VALUES (?, ?, ?, ?, '', 0, ?, ?, ?, ?, ?)
+	`, room, fingerprint, nickname, colorIndex, redditURL, redditTitle, redditSub, redditScore, redditComments)
+	return err
+}
+
 func (s *Store) RecentMessages(room string, limit int) ([]ChatRow, error) {
 	rows, err := s.db.Query(`
-		SELECT room, fingerprint, nickname, color_index, text, is_system, COALESCE(gif_url, ''), created_at
+		SELECT room, fingerprint, nickname, color_index, text, is_system,
+			COALESCE(gif_url, ''),
+			COALESCE(reddit_url, ''), COALESCE(reddit_title, ''), COALESCE(reddit_sub, ''),
+			COALESCE(reddit_score, 0), COALESCE(reddit_comments, 0),
+			created_at
 		FROM chat_messages
 		WHERE room = ?
 		ORDER BY created_at DESC
@@ -383,7 +408,9 @@ func (s *Store) RecentMessages(room string, limit int) ([]ChatRow, error) {
 		var m ChatRow
 		var sys int
 		var ts string
-		if err := rows.Scan(&m.Room, &m.Fingerprint, &m.Nickname, &m.ColorIndex, &m.Text, &sys, &m.GifURL, &ts); err != nil {
+		if err := rows.Scan(&m.Room, &m.Fingerprint, &m.Nickname, &m.ColorIndex, &m.Text, &sys, &m.GifURL,
+			&m.RedditURL, &m.RedditTitle, &m.RedditSub, &m.RedditScore, &m.RedditComments,
+			&ts); err != nil {
 			continue
 		}
 		m.IsSystem = sys != 0
