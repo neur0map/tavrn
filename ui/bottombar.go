@@ -7,13 +7,14 @@ import (
 )
 
 type BottomBar struct {
-	Width        int
-	IsGallery    bool
-	IsFeed       bool
-	IsTankard    bool
-	IsDMMode     bool
-	MentionCount int
-	DMUnread     int
+	Width         int
+	IsGallery     bool
+	IsFeed        bool
+	IsRedditFocus bool
+	IsTankard     bool
+	IsDMMode      bool
+	MentionCount  int
+	DMUnread      int
 }
 
 func NewBottomBar() BottomBar {
@@ -48,6 +49,12 @@ func (b BottomBar) View() string {
 			k.Render("E") + " " + d.Render("expand") + sep +
 			k.Render("D") + " " + d.Render("delete") + sep +
 			k.Render("TAB") + " " + d.Render("select")
+	} else if b.IsRedditFocus {
+		content = "  " +
+			k.Render("↑↓") + " " + d.Render("navigate posts") + sep +
+			k.Render("ENTER") + " " + d.Render("open") + sep +
+			k.Render("o") + " " + d.Render("copy link") + sep +
+			k.Render("ESC") + " " + d.Render("back")
 	} else if b.IsFeed {
 		content = "  " +
 			k.Render("j/k") + " " + d.Render("scroll") + sep +

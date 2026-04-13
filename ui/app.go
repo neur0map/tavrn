@@ -74,11 +74,14 @@ type App struct {
 	gallery GalleryView
 
 	// Reddit feed
-	feed         FeedView
-	feedActive   bool
-	feedFocused  bool // true = feed has input, false = chat has input
-	redditClient *reddit.Client
-	lastShareAt  time.Time // share cooldown
+	feed            FeedView
+	feedActive      bool
+	feedFocused     bool // true = feed has input, false = chat has input
+	redditClient    *reddit.Client
+	lastShareAt     time.Time // share cooldown
+	redditFocus     bool      // true = navigating reddit posts in chat
+	redditFocusIdx  int       // index into reddit messages
+	redditFocusMsgs []int     // indices of reddit messages in chat
 
 	// Modal
 	modal           ModalType
@@ -837,12 +840,91 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	// Reddit focus mode in chat — navigate shared posts
+	if a.redditFocus {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch keyMsg.String() {
+			case "up", "k":
+				if a.redditFocusIdx > 0 {
+					a.redditFocusIdx--
+					a.chat.SetHighlight(a.redditFocusMsgs[a.redditFocusIdx])
+				}
+				return a, nil
+			case "down", "j":
+				if a.redditFocusIdx < len(a.redditFocusMsgs)-1 {
+					a.redditFocusIdx++
+					a.chat.SetHighlight(a.redditFocusMsgs[a.redditFocusIdx])
+				}
+				return a, nil
+			case "enter":
+				// Open the focused reddit post in feed comment view
+				if a.redditFocusIdx < len(a.redditFocusMsgs) {
+					msgIdx := a.redditFocusMsgs[a.redditFocusIdx]
+					chatMsg := a.chat.messages[msgIdx]
+					a.redditFocus = false
+					a.chat.ClearHighlight()
+					// Switch to feed and load comments
+					a.feedActive = true
+					a.feedFocused = true
+					a.chat.input.Blur()
+					a.doLayout()
+					rc := a.redditClient
+					// Extract post ID from the URL
+					sub := chatMsg.RedditSub
+					postID := extractRedditPostID(chatMsg.RedditURL)
+					if postID != "" && rc != nil {
+						a.feed.loadingComment = true
+						return a, func() tea.Msg {
+							comments, _ := rc.FetchComments(sub, postID, 20)
+							post := &reddit.Post{
+								Title:       chatMsg.RedditTitle,
+								Subreddit:   chatMsg.RedditSub,
+								Score:       chatMsg.RedditScore,
+								NumComments: chatMsg.RedditComments,
+								URL:         chatMsg.RedditURL,
+								Permalink:   "/" + sub + "/comments/" + postID + "/",
+							}
+							return feedCommentsMsg{comments: comments, post: post}
+						}
+					}
+				}
+				return a, nil
+			case "o":
+				// Copy link of focused post
+				if a.redditFocusIdx < len(a.redditFocusMsgs) {
+					msgIdx := a.redditFocusMsgs[a.redditFocusIdx]
+					url := a.chat.messages[msgIdx].RedditURL
+					a.chat.AddSystemLog("Link copied!")
+					return a, tea.SetClipboard(url)
+				}
+				return a, nil
+			case "esc":
+				a.redditFocus = false
+				a.chat.ClearHighlight()
+				return a, nil
+			}
+		}
+		return a, nil
+	}
+
 	// Normal chat rooms
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
+		case "o":
+			// Enter reddit focus mode if there are shared posts and no input
+			if !a.chat.HasInput() {
+				indices := a.findRedditMessages()
+				if len(indices) > 0 {
+					a.redditFocus = true
+					a.redditFocusMsgs = indices
+					a.redditFocusIdx = len(indices) - 1 // start at most recent
+					a.chat.SetHighlight(indices[a.redditFocusIdx])
+					return a, nil
+				}
+			}
 		case "enter":
 			if a.chat.MentionPopupActive() {
 				// Let ChatView.Update handle Tab/Enter completion
@@ -1006,6 +1088,31 @@ func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
 		RedditURL:      "https://reddit.com" + post.Permalink,
 	})
 	return a, nil
+}
+
+// findRedditMessages returns indices of reddit embed messages in chat.
+func (a App) findRedditMessages() []int {
+	var indices []int
+	for i, msg := range a.chat.messages {
+		if msg.IsReddit {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+// extractRedditPostID extracts the post ID from a reddit URL like
+// https://reddit.com/r/sub/comments/POSTID/title/
+func extractRedditPostID(url string) string {
+	parts := strings.Split(url, "/comments/")
+	if len(parts) < 2 {
+		return ""
+	}
+	rest := parts[1]
+	if idx := strings.Index(rest, "/"); idx > 0 {
+		return rest[:idx]
+	}
+	return rest
 }
 
 func (a App) handleInput() (tea.Model, tea.Cmd) {
@@ -1825,6 +1932,7 @@ func (a App) View() tea.View {
 	a.bottomBar.IsTankard = a.tankardFocused
 	a.bottomBar.IsDMMode = a.dmMode
 	a.bottomBar.IsFeed = a.feedActive && a.session.Room == a.firstRoom && !a.dmMode
+	a.bottomBar.IsRedditFocus = a.redditFocus
 
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()

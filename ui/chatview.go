@@ -49,6 +49,9 @@ type ChatView struct {
 	OwnerName        string
 	OwnerFingerprint string
 	lastScrollAt     time.Time
+
+	// Reddit post highlight (focus mode)
+	highlightIdx int // -1 = no highlight
 }
 
 func NewChatView() ChatView {
@@ -61,10 +64,11 @@ func NewChatView() ChatView {
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(10))
 
 	return ChatView{
-		viewport:    vp,
-		input:       ti,
-		messages:    make([]chat.Message, 0),
-		typingUsers: make(map[string]time.Time),
+		viewport:     vp,
+		input:        ti,
+		messages:     make([]chat.Message, 0),
+		highlightIdx: -1,
+		typingUsers:  make(map[string]time.Time),
 	}
 }
 
@@ -92,6 +96,20 @@ func (c *ChatView) SetSize(width, height int) {
 // SetOwnNickname sets the current user's nickname for mention highlighting.
 func (c *ChatView) SetOwnNickname(nick string) {
 	c.ownNickname = nick
+}
+
+// SetHighlight highlights a specific message index (for reddit focus mode).
+func (c *ChatView) SetHighlight(idx int) {
+	c.highlightIdx = idx
+	c.renderMessages()
+	// Scroll to show the highlighted message
+	c.viewport.GotoBottom()
+}
+
+// ClearHighlight removes the message highlight.
+func (c *ChatView) ClearHighlight() {
+	c.highlightIdx = -1
+	c.renderMessages()
 }
 
 // highlightMentions replaces @name tokens with styled versions.
@@ -243,8 +261,21 @@ func (c *ChatView) renderMessages() {
 		if msg.IsReddit {
 			lines = append(lines, "")
 			redditBox := RenderRedditBox(&c.messages[i])
-			for _, rl := range strings.Split(redditBox, "\n") {
-				lines = append(lines, "  "+rl)
+			prefix := "  "
+			if i == c.highlightIdx {
+				// Highlighted reddit post — show cursor
+				cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+				for j, rl := range strings.Split(redditBox, "\n") {
+					if j == 0 {
+						lines = append(lines, cursor.Render("▸ ")+rl)
+					} else {
+						lines = append(lines, cursor.Render("│ ")+rl)
+					}
+				}
+			} else {
+				for _, rl := range strings.Split(redditBox, "\n") {
+					lines = append(lines, prefix+rl)
+				}
 			}
 			lines = append(lines, "")
 			prevNick = ""
