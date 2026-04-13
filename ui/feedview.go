@@ -162,7 +162,6 @@ func (f FeedView) viewList() string {
 	content := strings.Join(lines, "\n")
 	return lipgloss.NewStyle().
 		Width(f.width).
-		Height(f.height).
 		Render(content)
 }
 
@@ -411,8 +410,33 @@ func (f FeedView) updateComments(msg tea.Msg) (FeedView, tea.Cmd) {
 }
 
 func (f *FeedView) ensureVisible() {
-	// Keep cursor post always at the top — simple and always correct.
-	f.scroll = f.cursor
+	if f.cursor < f.scroll {
+		f.scroll = f.cursor
+	}
+	// Check if cursor is past the visible area by measuring rendered heights
+	contentH := f.height - 4
+	used := 0
+	for i := f.scroll; i < len(f.posts); i++ {
+		cardH := 4 // compact estimate
+		if f.posts[i].HasImage {
+			if f.client != nil {
+				if thumb, ok := f.client.GetThumb(f.posts[i].ID); ok && thumb != "" {
+					cardH = strings.Count(thumb, "\n") + 5 // thumb lines + title/meta/border
+				} else {
+					cardH = 4
+				}
+			}
+		}
+		if i == f.cursor && used+cardH > contentH {
+			// Cursor card won't fit — scroll down
+			f.scroll = f.cursor
+			return
+		}
+		used += cardH
+		if i >= f.cursor {
+			return // cursor is visible
+		}
+	}
 }
 
 // Helpers
