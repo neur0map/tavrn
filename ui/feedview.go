@@ -194,15 +194,21 @@ func (f FeedView) renderCompact(post reddit.Post, selected bool) string {
 	border := lipgloss.RoundedBorder()
 	borderColor := ColorBorder
 	if selected {
-		borderColor = ColorAccent
+		borderColor = lipgloss.Color("11") // bright yellow
 	}
 
-	return lipgloss.NewStyle().
+	card := lipgloss.NewStyle().
 		Border(border).
 		BorderForeground(borderColor).
 		Padding(0, 1).
-		Width(f.width - 2).
+		Width(f.width - 4).
 		Render(content)
+
+	if selected {
+		cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Render("▸ ")
+		return cursor + card
+	}
+	return "  " + card
 }
 
 func (f FeedView) renderCard(post reddit.Post, selected bool) string {
@@ -253,15 +259,30 @@ func (f FeedView) renderCard(post reddit.Post, selected bool) string {
 	border := lipgloss.RoundedBorder()
 	borderColor := ColorBorder
 	if selected {
-		borderColor = ColorAccent
+		borderColor = lipgloss.Color("11") // bright yellow
 	}
 
-	return lipgloss.NewStyle().
+	card := lipgloss.NewStyle().
 		Border(border).
 		BorderForeground(borderColor).
 		Padding(0, 1).
-		Width(f.width - 2).
+		Width(f.width - 4).
 		Render(content)
+
+	if selected {
+		// Add cursor indicator to each line
+		cardLines := strings.Split(card, "\n")
+		cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
+		for i, line := range cardLines {
+			if i == 0 {
+				cardLines[i] = cursor.Render("▸ ") + line
+			} else {
+				cardLines[i] = cursor.Render("│ ") + line
+			}
+		}
+		return strings.Join(cardLines, "\n")
+	}
+	return "  " + strings.ReplaceAll(card, "\n", "\n  ")
 }
 
 // Comment view

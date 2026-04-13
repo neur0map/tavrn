@@ -50,6 +50,7 @@ func (b BottomBar) View() string {
 			k.Render("TAB") + " " + d.Render("select")
 	} else if b.IsFeed {
 		content = "  " +
+			k.Render("TAB") + " " + d.Render("chat") + sep +
 			k.Render("j/k") + " " + d.Render("scroll") + sep +
 			k.Render("ENTER") + " " + d.Render("comments") + sep +
 			k.Render("s") + " " + d.Render("share") + sep +
