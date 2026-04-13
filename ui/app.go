@@ -1017,7 +1017,7 @@ func (a App) loadThumbnail(postID, previewURL string) tea.Cmd {
 			rc.SetThumb(postID, " ") // mark as failed, don't retry
 			return feedThumbnailMsg{postID: postID, rendered: ""}
 		}
-		rendered := gif.RenderHalfBlocks(img, thumbW)
+		rendered := gif.RenderHalfBlocksClean(img, thumbW)
 		rc.SetThumb(postID, rendered) // server-wide cache
 		return feedThumbnailMsg{postID: postID, rendered: rendered}
 	}

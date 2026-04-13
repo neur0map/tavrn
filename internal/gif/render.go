@@ -43,6 +43,31 @@ func RenderHalfBlocks(img image.Image, width int) string {
 	return renderToString(dithered, width, height)
 }
 
+// RenderHalfBlocksClean converts an image to a half-block ANSI string
+// without Floyd-Steinberg dithering. Produces sharper, cleaner output
+// for photographs since we already use 24-bit true color.
+func RenderHalfBlocksClean(img image.Image, width int) string {
+	bounds := img.Bounds()
+	aspect := float64(bounds.Dy()) / float64(bounds.Dx())
+	height := int(float64(width) * aspect * 0.5)
+	if height%2 != 0 {
+		height++
+	}
+	if height < 2 {
+		height = 2
+	}
+	maxHeight := width
+	if height > maxHeight {
+		height = maxHeight
+		if height%2 != 0 {
+			height--
+		}
+	}
+
+	resized := resizeImage(img, width, height)
+	return renderToString(resized, width, height)
+}
+
 // RenderFrames converts a slice of images to half-block ANSI strings.
 func RenderFrames(frames []image.Image, width int) []string {
 	rendered := make([]string, len(frames))
