@@ -839,6 +839,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if post := a.feed.SelectedPost(); post != nil {
 					return a.shareFeedPost(post)
 				}
+			case "o":
+				// Show clickable OSC 8 link for selected post
+				if post := a.feed.SelectedPost(); post != nil {
+					url := "https://reddit.com" + post.Permalink
+					a.chat.AddSystemLog(osc8Link(url, url))
+				}
+				return a, nil
 			case "esc":
 				if a.feed.InCommentView() {
 					a.feed.BackToList()

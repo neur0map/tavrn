@@ -8,6 +8,13 @@ import (
 	"tavrn.sh/internal/chat"
 )
 
+// osc8Link wraps text in an OSC 8 hyperlink escape sequence.
+// Terminals that support it (iTerm2, Ghostty, Kitty, Wezterm) make it clickable.
+// Others just show the text.
+func osc8Link(url, text string) string {
+	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
+}
+
 // RenderRedditBox renders a shared Reddit post as a styled card in chat.
 func RenderRedditBox(msg *chat.Message) string {
 	dim := lipgloss.NewStyle().Foreground(ColorDim)
@@ -22,10 +29,12 @@ func RenderRedditBox(msg *chat.Message) string {
 
 	meta := fmt.Sprintf("%d ^  %d comments", msg.RedditScore, msg.RedditComments)
 
+	link := osc8Link(msg.RedditURL, msg.RedditURL)
+
 	var content string
 	if msg.RedditThumb != "" {
 		thumbLines := strings.Split(msg.RedditThumb, "\n")
-		textLines := []string{title, dim.Render(meta), dim.Render(msg.RedditURL)}
+		textLines := []string{title, dim.Render(meta), dim.Render(link)}
 		maxLines := len(thumbLines)
 		if len(textLines) > maxLines {
 			maxLines = len(textLines)
@@ -46,7 +55,7 @@ func RenderRedditBox(msg *chat.Message) string {
 		}
 		content = header + "\n" + strings.Join(rows, "\n")
 	} else {
-		content = header + "\n" + title + "\n" + dim.Render(meta) + "\n" + dim.Render(msg.RedditURL)
+		content = header + "\n" + title + "\n" + dim.Render(meta) + "\n" + dim.Render(link)
 	}
 
 	return lipgloss.NewStyle().
