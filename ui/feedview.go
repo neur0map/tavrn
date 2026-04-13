@@ -247,15 +247,24 @@ func (f *FeedView) renderCommentView() {
 	b.WriteString("\n")
 
 	if p.Selftext != "" {
+		b.WriteString("\n")
 		for _, line := range feedWrapText(p.Selftext, f.width-6) {
-			b.WriteString(line)
+			b.WriteString("  " + line)
 			b.WriteString("\n")
 		}
-		b.WriteString("\n")
 	}
 
+	// Comments header — clear separator
+	b.WriteString("\n")
+	commentsHeader := lipgloss.NewStyle().
+		Foreground(ColorAccent).Bold(true).
+		Render(fmt.Sprintf("COMMENTS (%d)", p.NumComments))
+	b.WriteString(commentsHeader + "\n")
+	b.WriteString(dimStyle.Render(strings.Repeat("─", f.width-4)))
+	b.WriteString("\n\n")
+
 	if len(f.comments) == 0 {
-		b.WriteString(dimStyle.Render("No comments"))
+		b.WriteString(dimStyle.Render("  No comments yet"))
 	}
 
 	for _, c := range f.comments {
