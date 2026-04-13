@@ -26,9 +26,6 @@ type FeedView struct {
 	width  int
 	height int
 
-	// Shared reddit client (server-wide thumbnail cache lives here)
-	client *reddit.Client
-
 	// Comment view
 	viewport    viewport.Model
 	comments    []reddit.Comment
@@ -40,11 +37,10 @@ type FeedView struct {
 	lastUpdate     time.Time
 }
 
-func NewFeedView(client *reddit.Client) FeedView {
+func NewFeedView() FeedView {
 	vp := viewport.New(viewport.WithWidth(40), viewport.WithHeight(20))
 	return FeedView{
 		state:    feedStateList,
-		client:   client,
 		viewport: vp,
 	}
 }
@@ -85,23 +81,6 @@ func (f *FeedView) BackToList() {
 	f.state = feedStateList
 	f.comments = nil
 	f.commentPost = nil
-}
-
-// NextThumbToLoad returns the first visible post that needs a thumbnail loaded.
-// Returns nil if nothing needs loading.
-func (f *FeedView) NextThumbToLoad() *reddit.Post {
-	if f.client == nil {
-		return nil
-	}
-	for i := f.scroll; i < len(f.posts) && i < f.scroll+10; i++ {
-		p := f.posts[i]
-		if p.HasImage && p.PreviewURL != "" {
-			if _, ok := f.client.GetThumb(p.ID); !ok {
-				return &f.posts[i]
-			}
-		}
-	}
-	return nil
 }
 
 // View renders the feed panel.
@@ -155,38 +134,47 @@ func (f FeedView) viewList() string {
 }
 
 func (f FeedView) renderCard(post reddit.Post, selected bool) string {
-	cardW := f.width - 4 // border + padding
+	cardW := f.width - 8 // border + padding + cursor
 	if cardW < 20 {
 		cardW = 20
 	}
 
 	dimStyle := lipgloss.NewStyle().Foreground(ColorDim)
-	titleStyle := lipgloss.NewStyle()
+	titleStyle := lipgloss.NewStyle().Bold(true)
+	subStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+	scoreStyle := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
+	linkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Underline(true)
+
 	if selected {
-		titleStyle = titleStyle.Bold(true).Foreground(lipgloss.Color("15"))
+		titleStyle = titleStyle.Foreground(lipgloss.Color("15"))
 	}
 
-	// Title
-	title := post.Title
-	if len(title) > cardW*2 {
-		title = title[:cardW*2-3] + "..."
-	}
-	titleLines := feedWrapText(title, cardW)
+	// Title (wrapped)
+	titleLines := feedWrapText(post.Title, cardW)
 
-	// Meta line
-	sub := "r/" + post.Subreddit
+	// Meta: subreddit, score, comments, time
+	sub := subStyle.Render("r/" + post.Subreddit)
+	score := scoreStyle.Render(fmt.Sprintf("%d ^", post.Score))
 	ago := feedShortTimeAgo(post.CreatedUTC)
-	meta := fmt.Sprintf("%s  %d ^  %d comments  %s", sub, post.Score, post.NumComments, ago)
+	meta := sub + "  " + score + "  " + dimStyle.Render(fmt.Sprintf("%d comments  %s", post.NumComments, ago))
 
-	// Build card content: image on top (full width), then title, then meta
+	// Link
+	url := post.URL
+	if post.IsSelf {
+		url = "https://reddit.com" + post.Permalink
+	}
+	link := linkStyle.Render(osc8Link(url, truncateURL(url, cardW)))
+
 	var parts []string
 
-	// Image — full width of the card
-	if f.client != nil {
-		thumb, ok := f.client.GetThumb(post.ID)
-		if ok && thumb != "" {
-			parts = append(parts, thumb)
-		}
+	// Image tag if post has image
+	if post.HasImage && !post.IsSelf {
+		imgTag := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("243")).
+			Background(lipgloss.Color("236")).
+			Padding(0, 1).
+			Render("image")
+		parts = append(parts, imgTag)
 	}
 
 	// Title
@@ -194,15 +182,16 @@ func (f FeedView) renderCard(post reddit.Post, selected bool) string {
 		parts = append(parts, titleStyle.Render(line))
 	}
 
-	// Meta
-	parts = append(parts, dimStyle.Render(meta))
+	// Meta + link
+	parts = append(parts, meta)
+	parts = append(parts, link)
 
 	content := strings.Join(parts, "\n")
 
 	border := lipgloss.RoundedBorder()
 	borderColor := ColorBorder
 	if selected {
-		borderColor = lipgloss.Color("11") // bright yellow
+		borderColor = lipgloss.Color("11")
 	}
 
 	card := lipgloss.NewStyle().
@@ -213,7 +202,6 @@ func (f FeedView) renderCard(post reddit.Post, selected bool) string {
 		Render(content)
 
 	if selected {
-		// Add cursor indicator to each line
 		cardLines := strings.Split(card, "\n")
 		cursor := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 		for i, line := range cardLines {
@@ -226,6 +214,13 @@ func (f FeedView) renderCard(post reddit.Post, selected bool) string {
 		return strings.Join(cardLines, "\n")
 	}
 	return "  " + strings.ReplaceAll(card, "\n", "\n  ")
+}
+
+func truncateURL(url string, maxW int) string {
+	if len(url) <= maxW {
+		return url
+	}
+	return url[:maxW-3] + "..."
 }
 
 // Comment view

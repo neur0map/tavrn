@@ -38,11 +38,6 @@ type feedPostsMsg struct {
 	posts []reddit.Post
 }
 
-type feedThumbnailMsg struct {
-	postID   string
-	rendered string
-}
-
 type appState int
 
 const (
@@ -191,7 +186,7 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		rooms:            NewRoomsPanel(),
 		online:           NewOnlinePanel(),
 		gallery:          NewGalleryView(sess.Fingerprint),
-		feed:             NewFeedView(rc),
+		feed:             NewFeedView(),
 		redditClient:     rc,
 		store:            st,
 		hub:              h,
@@ -248,10 +243,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case feedPostsMsg:
 		a.feed.SetPosts(msg.posts)
 		return a, nil
-	case feedThumbnailMsg:
-		// Thumbnail is already stored in server-wide cache by loadThumbnail.
-		// Returning here triggers a redraw to show it.
-		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
@@ -297,23 +288,6 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				posts, _ := a.redditClient.Posts()
 				if len(posts) > 0 && len(posts) != len(a.feed.posts) {
 					a.feed.SetPosts(posts)
-				}
-			}
-			// Load thumbnails for visible feed posts (up to 3 concurrent)
-			if a.feedActive && a.redditClient != nil {
-				var thumbCmds []tea.Cmd
-				for i := 0; i < 3; i++ {
-					p := a.feed.NextThumbToLoad()
-					if p == nil {
-						break
-					}
-					if a.redditClient.MarkThumbLoading(p.ID) {
-						thumbCmds = append(thumbCmds, a.loadThumbnail(p.ID, p.PreviewURL))
-					}
-				}
-				if len(thumbCmds) > 0 {
-					thumbCmds = append(thumbCmds, doTick(a.nextTickInterval()))
-					return a, tea.Batch(thumbCmds...)
 				}
 			}
 		}
@@ -1003,12 +977,6 @@ func (a App) applyNickChange(nick string) (tea.Model, tea.Cmd) {
 }
 
 func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
-	thumb := ""
-	if a.redditClient != nil {
-		if t, ok := a.redditClient.GetThumb(post.ID); ok {
-			thumb = t
-		}
-	}
 	a.onSend(session.Msg{
 		Type:           session.MsgRedditShare,
 		Nickname:       a.session.Nickname,
@@ -1020,28 +988,8 @@ func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
 		RedditScore:    post.Score,
 		RedditComments: post.NumComments,
 		RedditURL:      "https://reddit.com" + post.Permalink,
-		RedditThumb:    thumb,
 	})
 	return a, nil
-}
-
-func (a App) loadThumbnail(postID, previewURL string) tea.Cmd {
-	rc := a.redditClient
-	// Render at feed panel width minus card border/padding/cursor
-	thumbW := a.feed.width - 8
-	if thumbW < 20 {
-		thumbW = 20
-	}
-	return func() tea.Msg {
-		img, err := rc.FetchImage(previewURL)
-		if err != nil || img == nil {
-			rc.SetThumb(postID, " ") // mark as failed, don't retry
-			return feedThumbnailMsg{postID: postID, rendered: ""}
-		}
-		rendered := gif.RenderHalfBlocksClean(img, thumbW)
-		rc.SetThumb(postID, rendered) // server-wide cache
-		return feedThumbnailMsg{postID: postID, rendered: rendered}
-	}
 }
 
 func (a App) handleInput() (tea.Model, tea.Cmd) {
