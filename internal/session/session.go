@@ -34,6 +34,7 @@ const (
 	MsgPollClose    // poll closed by creator
 	MsgGif          // animated GIF in chat
 	MsgDM           // direct message between two users
+	MsgRedditShare  // shared reddit post in chat
 )
 
 // NoteData carries sticky note info through the hub.
@@ -64,6 +65,13 @@ type Msg struct {
 	GifDelays   []int    // frame delays in milliseconds
 	GifTitle    string   // GIF title for display
 	GifURL      string   // source URL for persistence
+
+	RedditTitle    string
+	RedditSub      string
+	RedditScore    int
+	RedditComments int
+	RedditURL      string
+	RedditThumb    string
 }
 
 // Session represents a connected user.

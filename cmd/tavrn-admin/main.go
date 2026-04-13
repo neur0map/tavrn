@@ -22,6 +22,7 @@ import (
 	"tavrn.sh/internal/hub"
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/poll"
+	"tavrn.sh/internal/reddit"
 	"tavrn.sh/internal/sanitize"
 	"tavrn.sh/internal/search"
 	"tavrn.sh/internal/server"
@@ -121,6 +122,23 @@ func main() {
 				log.Fatalf("update: %v", err)
 			}
 			return
+		case "--feed-add":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: tavrn --feed-add <subreddit> [subreddit...]")
+				os.Exit(1)
+			}
+			runFeedAdd(os.Args[2:])
+			return
+		case "--feed-remove":
+			if len(os.Args) < 3 {
+				fmt.Println("Usage: tavrn --feed-remove <subreddit>")
+				os.Exit(1)
+			}
+			runFeedRemove(os.Args[2])
+			return
+		case "--feed-list":
+			runFeedList()
+			return
 		case "help", "--help", "-h":
 			fmt.Println("Maintainer commands:")
 			fmt.Println("  tavrn                            Start the SSH server")
@@ -137,6 +155,9 @@ func main() {
 			fmt.Println("  tavrn --bartender-on             Enable bartender (live)")
 			fmt.Println("  tavrn --set-flag bandit 1 \"flag\" Set a wargame flag (bandit/natas/leviathan)")
 			fmt.Println("  tavrn --list-flags bandit         List levels with flags for a wargame")
+			fmt.Println("  tavrn --feed-add <sub> [sub...]  Add subreddit(s) to feed")
+			fmt.Println("  tavrn --feed-remove <sub>        Remove subreddit from feed")
+			fmt.Println("  tavrn --feed-list                List feed subreddits")
 			fmt.Println("  tavrn --update                   Pull main, rebuild, restart service")
 			fmt.Println("  tavrn --web-audio                Start with web audio streaming on :8090")
 			return
@@ -347,6 +368,60 @@ func runListFlags(wargameName string) {
 	}
 }
 
+func runFeedAdd(subreddits []string) {
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	for _, sub := range subreddits {
+		sub = strings.ToLower(strings.TrimSpace(sub))
+		sub = strings.TrimPrefix(sub, "r/")
+		if sub == "" {
+			continue
+		}
+		if err := st.AddFeedSubreddit(sub, "admin"); err != nil {
+			fmt.Printf("Failed to add r/%s: %v\n", sub, err)
+			continue
+		}
+		fmt.Printf("Added r/%s to feed\n", sub)
+	}
+}
+
+func runFeedRemove(subreddit string) {
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	subreddit = strings.ToLower(strings.TrimSpace(subreddit))
+	subreddit = strings.TrimPrefix(subreddit, "r/")
+	if err := st.RemoveFeedSubreddit(subreddit); err != nil {
+		log.Fatalf("remove failed: %v", err)
+	}
+	fmt.Printf("Removed r/%s from feed\n", subreddit)
+}
+
+func runFeedList() {
+	st, err := store.New(resolvedDBPath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+	defer st.Close()
+
+	subs := st.FeedSubreddits()
+	if len(subs) == 0 {
+		fmt.Println("No subreddits configured. Use --feed-add to add some.")
+		return
+	}
+	fmt.Println("Feed subreddits:")
+	for _, sub := range subs {
+		fmt.Printf("  r/%s\n", sub)
+	}
+}
+
 func runPurge() {
 	// Broadcast purge to connected clients before wiping
 	os.WriteFile(resolvedPath(purgeFile), []byte("1"), 0600)
@@ -490,6 +565,17 @@ func runServer() {
 		log.Println("gif search: disabled (no KLIPY_API_KEY)")
 	}
 
+	// Reddit feed client
+	var redditClient *reddit.Client
+	feedSubs := st.FeedSubreddits()
+	if len(feedSubs) > 0 {
+		redditClient = reddit.NewClient()
+		log.Printf("reddit feed: enabled (%d subreddits)", len(feedSubs))
+		go redditClient.FetchMerged(feedSubs, 25)
+	} else {
+		log.Println("reddit feed: no subreddits configured (use --feed-add)")
+	}
+
 	// web search
 	var searcher *search.Searcher
 	exaKey := os.Getenv("EXA_API_KEY")
@@ -521,6 +607,7 @@ func runServer() {
 		WargameStore:     wargame.New(st.DB()),
 		Searcher:         searcher,
 		DMStore:          initDMStore(st),
+		RedditClient:     redditClient,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)

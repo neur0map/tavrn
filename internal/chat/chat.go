@@ -23,6 +23,15 @@ type Message struct {
 	GifURL      string
 	GifFrame    int // current animation frame index
 	GifLastTick time.Time
+
+	// Reddit embed
+	IsReddit       bool
+	RedditTitle    string
+	RedditSub      string
+	RedditScore    int
+	RedditComments int
+	RedditURL      string
+	RedditThumb    string // pre-rendered thumbnail
 }
 
 // ParseResult holds the result of parsing user input.

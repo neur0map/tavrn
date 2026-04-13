@@ -240,6 +240,17 @@ func (c *ChatView) renderMessages() {
 			continue
 		}
 
+		if msg.IsReddit {
+			lines = append(lines, "")
+			redditBox := RenderRedditBox(&c.messages[i])
+			for _, rl := range strings.Split(redditBox, "\n") {
+				lines = append(lines, "  "+rl)
+			}
+			lines = append(lines, "")
+			prevNick = ""
+			continue
+		}
+
 		// Discord-style: group consecutive messages from same user
 		sameUser := msg.Nickname == prevNick
 		prevNick = msg.Nickname

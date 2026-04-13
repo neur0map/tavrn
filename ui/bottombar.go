@@ -9,6 +9,7 @@ import (
 type BottomBar struct {
 	Width        int
 	IsGallery    bool
+	IsFeed       bool
 	IsTankard    bool
 	IsDMMode     bool
 	MentionCount int
@@ -47,6 +48,13 @@ func (b BottomBar) View() string {
 			k.Render("E") + " " + d.Render("expand") + sep +
 			k.Render("D") + " " + d.Render("delete") + sep +
 			k.Render("TAB") + " " + d.Render("select")
+	} else if b.IsFeed {
+		content = "  " +
+			k.Render("j/k") + " " + d.Render("scroll") + sep +
+			k.Render("ENTER") + " " + d.Render("comments") + sep +
+			k.Render("s") + " " + d.Render("share") + sep +
+			k.Render("ESC") + " " + d.Render("back") + sep +
+			k.Render("S-TAB") + " " + d.Render("hide feed")
 	} else {
 		f4 := k.Render("F4") + " " + d.Render("mentions")
 		if b.MentionCount > 0 {

@@ -130,6 +130,12 @@ func (s *Store) migrate() error {
 	s.db.Exec(`ALTER TABLE chat_messages ADD COLUMN gif_url TEXT DEFAULT ''`)
 	// Add embedding column to bartender_memories if missing (migration).
 	s.db.Exec(`ALTER TABLE bartender_memories ADD COLUMN embedding TEXT`)
+	s.db.Exec(`CREATE TABLE IF NOT EXISTS feed_subreddits (
+	id        INTEGER PRIMARY KEY AUTOINCREMENT,
+	subreddit TEXT NOT NULL UNIQUE,
+	added_by  TEXT NOT NULL,
+	added_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+)`)
 	return nil
 }
 
@@ -743,4 +749,42 @@ func (s *Store) BartenderUserNote(fingerprint string) string {
 		return ""
 	}
 	return note
+}
+
+// ── Feed Subreddits ──
+
+// AddFeedSubreddit adds a subreddit to the feed.
+func (s *Store) AddFeedSubreddit(subreddit, addedBy string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO feed_subreddits (subreddit, added_by) VALUES (?, ?)`,
+		subreddit, addedBy)
+	return err
+}
+
+// RemoveFeedSubreddit removes a subreddit from the feed.
+func (s *Store) RemoveFeedSubreddit(subreddit string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.Exec(`DELETE FROM feed_subreddits WHERE subreddit = ?`, subreddit)
+	return err
+}
+
+// FeedSubreddits returns all configured feed subreddits.
+func (s *Store) FeedSubreddits() []string {
+	rows, err := s.db.Query(`SELECT subreddit FROM feed_subreddits ORDER BY added_at`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var subs []string
+	for rows.Next() {
+		var sub string
+		if err := rows.Scan(&sub); err == nil {
+			subs = append(subs, sub)
+		}
+	}
+	return subs
 }

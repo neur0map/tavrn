@@ -21,6 +21,7 @@ import (
 	"tavrn.sh/internal/identity"
 	"tavrn.sh/internal/jukebox"
 	"tavrn.sh/internal/poll"
+	"tavrn.sh/internal/reddit"
 	"tavrn.sh/internal/search"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
@@ -50,6 +51,7 @@ type Config struct {
 	WargameStore     *wargame.Store
 	Searcher         *search.Searcher
 	DMStore          *dm.Store
+	RedditClient     *reddit.Client
 }
 
 type Server struct {
@@ -273,6 +275,8 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 			s.cfg.Store.SaveMessage(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false)
 		case session.MsgGif:
 			s.cfg.Store.SaveMessageWithGif(msg.Room, msg.Fingerprint, msg.Nickname, msg.ColorIndex, msg.Text, false, msg.GifURL)
+		case session.MsgRedditShare:
+			// No DB persistence needed, just broadcast
 		case session.MsgSystem, session.MsgUserJoined, session.MsgUserLeft:
 			s.cfg.Store.SaveMessage(msg.Room, "", "", 0, msg.Text, true)
 		}
@@ -364,7 +368,7 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 		s.cfg.TavernName, s.cfg.TavernDomain, s.cfg.Tagline,
 		s.cfg.OwnerName, s.cfg.OwnerFingerprint, s.cfg.FirstRoom,
 		s.cfg.RoomTypes, s.cfg.GifClient, s.cfg.WargameStore,
-		s.cfg.DMStore)
+		s.cfg.DMStore, s.cfg.RedditClient)
 	return model, nil
 }
 

@@ -18,6 +18,7 @@ import (
 	"tavrn.sh/internal/identity"
 	"tavrn.sh/internal/mention"
 	"tavrn.sh/internal/poll"
+	"tavrn.sh/internal/reddit"
 	"tavrn.sh/internal/sanitize"
 	"tavrn.sh/internal/session"
 	"tavrn.sh/internal/store"
@@ -27,6 +28,20 @@ import (
 
 type HubMsg session.Msg
 type tickMsg time.Time
+
+type feedCommentsMsg struct {
+	comments []reddit.Comment
+	post     *reddit.Post
+}
+
+type feedPostsMsg struct {
+	posts []reddit.Post
+}
+
+type feedThumbnailMsg struct {
+	postID   string
+	rendered string
+}
 
 type appState int
 
@@ -62,6 +77,11 @@ type App struct {
 
 	// Gallery
 	gallery GalleryView
+
+	// Reddit feed
+	feed         FeedView
+	feedActive   bool
+	redditClient *reddit.Client
 
 	// Modal
 	modal           ModalType
@@ -159,7 +179,7 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 	game *sudoku.Game, ps *poll.Store,
 	tavernName, tavernDomain, tagline, ownerName, ownerFingerprint, firstRoom string,
 	roomTypes map[string]string, gifClient *gif.KlipyClient, ws *wargame.Store,
-	ds *dm.Store) App {
+	ds *dm.Store, rc *reddit.Client) App {
 	app := App{
 		state:            stateSplash,
 		splash:           NewSplash(sess.Nickname, sess.Fingerprint, sess.Flair, tavernDomain, tagline),
@@ -170,6 +190,8 @@ func NewApp(sess *session.Session, st *store.Store, h *hub.Hub, onSend func(sess
 		rooms:            NewRoomsPanel(),
 		online:           NewOnlinePanel(),
 		gallery:          NewGalleryView(sess.Fingerprint),
+		feed:             NewFeedView(),
+		redditClient:     rc,
 		store:            st,
 		hub:              h,
 		onSend:           onSend,
@@ -219,6 +241,15 @@ func (a App) Init() tea.Cmd {
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case feedCommentsMsg:
+		a.feed.SetComments(msg.comments, msg.post)
+		return a, nil
+	case feedPostsMsg:
+		a.feed.SetPosts(msg.posts)
+		return a, nil
+	case feedThumbnailMsg:
+		a.feed.SetThumbnail(msg.postID, msg.rendered)
+		return a, nil
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
@@ -249,6 +280,34 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.pruneExpiredMentions()
 			if a.sudokuView != nil {
 				a.sudokuView.Tick()
+			}
+			// Refresh reddit feed
+			if a.feedActive && a.redditClient != nil {
+				if a.redditClient.NeedsRefresh() {
+					subs := a.store.FeedSubreddits()
+					if len(subs) > 0 {
+						rc := a.redditClient
+						go func() {
+							rc.FetchMerged(subs, 25)
+						}()
+					}
+				}
+				posts, _ := a.redditClient.Posts()
+				if len(posts) > 0 && len(posts) != len(a.feed.posts) {
+					a.feed.SetPosts(posts)
+				}
+			}
+			// Load thumbnails for visible feed posts
+			if a.feedActive && a.redditClient != nil && len(a.feed.posts) > 0 {
+				for i := a.feed.scroll; i < len(a.feed.posts) && i < a.feed.scroll+10; i++ {
+					p := a.feed.posts[i]
+					if p.HasImage && p.PreviewURL != "" {
+						if _, ok := a.feed.thumbCache[p.ID]; !ok {
+							a.feed.thumbCache[p.ID] = "" // mark loading
+							return a, tea.Batch(doTick(a.nextTickInterval()), a.loadThumbnail(p.ID, p.PreviewURL))
+						}
+					}
+				}
 			}
 		}
 		if a.state == stateSplash {
@@ -575,6 +634,23 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.leaderboardModal = NewLeaderboardModal(entries, progress, a.session.Fingerprint)
 				return a, nil
 			}
+		case "shift+tab":
+			if a.session.Room == a.firstRoom && a.redditClient != nil {
+				a.feedActive = !a.feedActive
+				a.doLayout()
+				if a.feedActive && len(a.feed.posts) == 0 {
+					a.feed.loading = true
+					subs := a.store.FeedSubreddits()
+					if len(subs) > 0 {
+						rc := a.redditClient
+						return a, func() tea.Msg {
+							posts, _ := rc.FetchMerged(subs, 25)
+							return feedPostsMsg{posts: posts}
+						}
+					}
+				}
+				return a, nil
+			}
 		case "tab":
 			// Toggle DM mode only when input is empty and not in gallery/games
 			if a.dmStore != nil && !a.chat.HasInput() &&
@@ -714,6 +790,46 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.sudokuView.AddMessage(chat.NewSystemMessage(a.session.Room, "Puzzle solved! New puzzle starting..."))
 			a.sudokuGame.Reset()
 		}
+		return a, cmd
+	}
+
+	// Feed panel active in lounge
+	if a.feedActive && a.session.Room == a.firstRoom && !a.dmMode {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			switch msg.String() {
+			case "enter":
+				if !a.feed.InCommentView() {
+					if post := a.feed.SelectedPost(); post != nil {
+						a.feed.loadingComment = true
+						postCopy := *post
+						rc := a.redditClient
+						return a, func() tea.Msg {
+							comments, _ := rc.FetchComments(postCopy.Subreddit, postCopy.ID, 20)
+							return feedCommentsMsg{comments: comments, post: &postCopy}
+						}
+					}
+				}
+				return a, nil
+			case "s":
+				if post := a.feed.SelectedPost(); post != nil {
+					return a.shareFeedPost(post)
+				}
+			case "esc":
+				if a.feed.InCommentView() {
+					a.feed.BackToList()
+					return a, nil
+				}
+			case "ctrl+c":
+				return a, tea.Quit
+			}
+		case tea.MouseWheelMsg:
+			var cmd tea.Cmd
+			a.feed, cmd = a.feed.Update(msg)
+			return a, cmd
+		}
+		var cmd tea.Cmd
+		a.feed, cmd = a.feed.Update(msg)
 		return a, cmd
 	}
 
@@ -863,6 +979,39 @@ func (a App) applyNickChange(nick string) (tea.Model, tea.Cmd) {
 		Room: a.session.Room,
 	})
 	return a, nil
+}
+
+func (a App) shareFeedPost(post *reddit.Post) (tea.Model, tea.Cmd) {
+	thumb := ""
+	if t, ok := a.feed.thumbCache[post.ID]; ok {
+		thumb = t
+	}
+	a.onSend(session.Msg{
+		Type:           session.MsgRedditShare,
+		Nickname:       a.session.Nickname,
+		Fingerprint:    a.session.Fingerprint,
+		ColorIndex:     a.session.ColorIndex,
+		Room:           a.session.Room,
+		RedditTitle:    post.Title,
+		RedditSub:      post.Subreddit,
+		RedditScore:    post.Score,
+		RedditComments: post.NumComments,
+		RedditURL:      "https://reddit.com" + post.Permalink,
+		RedditThumb:    thumb,
+	})
+	return a, nil
+}
+
+func (a App) loadThumbnail(postID, previewURL string) tea.Cmd {
+	rc := a.redditClient
+	return func() tea.Msg {
+		img, err := rc.FetchImage(previewURL)
+		if err != nil || img == nil {
+			return feedThumbnailMsg{postID: postID, rendered: ""}
+		}
+		rendered := gif.RenderHalfBlocks(img, 12)
+		return feedThumbnailMsg{postID: postID, rendered: rendered}
+	}
 }
 
 func (a App) handleInput() (tea.Model, tea.Cmd) {
@@ -1182,6 +1331,20 @@ func (a *App) handleHubMsg(msg session.Msg) {
 			GifTitle:   msg.GifTitle,
 			GifURL:     msg.GifURL,
 			Timestamp:  msg.Timestamp,
+		})
+	case session.MsgRedditShare:
+		a.chat.AddMessage(chat.Message{
+			Room:           msg.Room,
+			Nickname:       msg.Nickname,
+			ColorIndex:     msg.ColorIndex,
+			Timestamp:      time.Now(),
+			IsReddit:       true,
+			RedditTitle:    msg.RedditTitle,
+			RedditSub:      msg.RedditSub,
+			RedditScore:    msg.RedditScore,
+			RedditComments: msg.RedditComments,
+			RedditURL:      msg.RedditURL,
+			RedditThumb:    msg.RedditThumb,
 		})
 	case session.MsgDM:
 		parts := strings.SplitN(msg.Text, "\x00", 2)
@@ -1573,6 +1736,19 @@ func (a *App) doLayout() {
 		onlineWidth = 0
 		chatWidth = a.width
 	}
+
+	feedWidth := 0
+	if a.feedActive && a.session.Room == a.firstRoom {
+		feedWidth = chatWidth / 2
+		if feedWidth < 30 {
+			feedWidth = 30
+		}
+		if feedWidth > chatWidth-30 {
+			feedWidth = chatWidth - 30
+		}
+		chatWidth = chatWidth - feedWidth
+	}
+
 	a.chatWidth = chatWidth
 
 	topBarHeight := 3
@@ -1604,6 +1780,9 @@ func (a *App) doLayout() {
 		if a.dmInConvo {
 			a.dmChatView.SetSize(chatWidth, mainHeight)
 		}
+	}
+	if feedWidth > 0 {
+		a.feed.SetSize(feedWidth, mainHeight)
 	}
 }
 
@@ -1654,6 +1833,7 @@ func (a App) View() tea.View {
 	a.bottomBar.MentionCount = a.unreadMentionCount("")
 	a.bottomBar.IsTankard = a.tankardFocused
 	a.bottomBar.IsDMMode = a.dmMode
+	a.bottomBar.IsFeed = a.feedActive && a.session.Room == a.firstRoom && !a.dmMode
 
 	topBar := a.topBar.View()
 	bottomBar := a.bottomBar.View()
@@ -1687,7 +1867,13 @@ func (a App) View() tea.View {
 		header := WargameHeader(a.session.Room, level, maxLevel, pts, chatW)
 		centerView = header + a.chat.View()
 	} else {
-		centerView = a.chat.View()
+		if a.feedActive && a.session.Room == a.firstRoom {
+			feedView := a.feed.View()
+			chatView := a.chat.View()
+			centerView = lipgloss.JoinHorizontal(lipgloss.Top, feedView, chatView)
+		} else {
+			centerView = a.chat.View()
+		}
 	}
 
 	var mainArea string
