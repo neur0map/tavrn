@@ -52,7 +52,7 @@ func (b BottomBar) View() string {
 		content = "  " +
 			k.Render("j/k") + " " + d.Render("scroll") + sep +
 			k.Render("ENTER") + " " + d.Render("comments") + sep +
-			k.Render("o") + " " + d.Render("link") + sep +
+			k.Render("o") + " " + d.Render("copy link") + sep +
 			k.Render("s") + " " + d.Render("share") + sep +
 			k.Render("S-TAB") + " " + d.Render("back")
 	} else {

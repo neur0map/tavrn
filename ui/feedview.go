@@ -35,6 +35,10 @@ type FeedView struct {
 	loading        bool
 	loadingComment bool
 	lastUpdate     time.Time
+
+	// Temporary notice (e.g. "Link copied!")
+	notice   string
+	noticeAt time.Time
 }
 
 func NewFeedView() FeedView {
@@ -83,6 +87,11 @@ func (f *FeedView) BackToList() {
 	f.commentPost = nil
 }
 
+func (f *FeedView) ShowNotice(text string) {
+	f.notice = text
+	f.noticeAt = time.Now()
+}
+
 // View renders the feed panel.
 func (f FeedView) View() string {
 	if f.state == feedStateComment {
@@ -109,6 +118,11 @@ func (f FeedView) viewList() string {
 	if !f.lastUpdate.IsZero() {
 		ago = " " + lipgloss.NewStyle().Foreground(ColorDim).
 			Render(feedFormatTimeAgo(f.lastUpdate))
+	}
+	// Show temporary notice (fades after 2s)
+	if f.notice != "" && time.Since(f.noticeAt) < 2*time.Second {
+		notice := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true).Render(f.notice)
+		ago += "  " + notice
 	}
 	lines = append(lines, header+ago)
 	lines = append(lines, lipgloss.NewStyle().Foreground(ColorDim).

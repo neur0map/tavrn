@@ -805,13 +805,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return a.shareFeedPost(post)
 				}
 			case "o":
-				// Copy link to chat as system log so user can highlight and copy
+				// Copy link to clipboard via OSC 52 (works over SSH)
 				if post := a.feed.SelectedPost(); post != nil {
 					url := post.URL
 					if post.IsSelf {
 						url = "https://reddit.com" + post.Permalink
 					}
-					a.chat.AddSystemLog(url)
+					a.feed.ShowNotice("Link copied!")
+					return a, tea.SetClipboard(url)
 				}
 				return a, nil
 			case "esc":
