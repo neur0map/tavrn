@@ -49,26 +49,18 @@ func TickGifAnimations(messages []chat.Message) bool {
 		}
 		animating++
 
-		elapsed := now.Sub(msg.GifLastTick)
-		// Advance through frames that should have played by now
-		for elapsed > 0 {
-			delay := 100 // default
-			if msg.GifFrame < len(msg.GifDelays) {
-				delay = msg.GifDelays[msg.GifFrame]
-			}
-			if delay < 20 {
-				delay = 20 // floor to avoid spinning
-			}
-			d := time.Duration(delay) * time.Millisecond
-			if elapsed < d {
-				break
-			}
-			msg.GifFrame = (msg.GifFrame + 1) % len(msg.GifFrames)
-			elapsed -= d
-			changed = true
+		delay := 100 // default
+		if msg.GifFrame < len(msg.GifDelays) {
+			delay = msg.GifDelays[msg.GifFrame]
 		}
-		if changed {
+		if delay < 20 {
+			delay = 20
+		}
+
+		if now.Sub(msg.GifLastTick) >= time.Duration(delay)*time.Millisecond {
+			msg.GifFrame = (msg.GifFrame + 1) % len(msg.GifFrames)
 			msg.GifLastTick = now
+			changed = true
 		}
 	}
 
