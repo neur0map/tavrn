@@ -92,3 +92,40 @@ func TestHasFlair(t *testing.T) {
 		t.Error("10 visits should have flair")
 	}
 }
+
+func TestRandomNickname(t *testing.T) {
+	name := RandomNickname()
+
+	// Must contain # separating name from discriminator
+	parts := strings.SplitN(name, "#", 2)
+	if len(parts) != 2 {
+		t.Fatalf("expected name#NNNN format, got %q", name)
+	}
+
+	// Discriminator must be exactly 4 digits
+	disc := parts[1]
+	if len(disc) != 4 {
+		t.Errorf("discriminator should be 4 digits, got %q", disc)
+	}
+	for _, ch := range disc {
+		if ch < '0' || ch > '9' {
+			t.Errorf("discriminator contains non-digit %q in %q", ch, name)
+		}
+	}
+
+	// Name part must be adjective_noun (two words separated by underscore)
+	words := strings.SplitN(parts[0], "_", 2)
+	if len(words) != 2 || words[0] == "" || words[1] == "" {
+		t.Errorf("expected adj_noun name part, got %q", parts[0])
+	}
+}
+
+func TestRandomNicknameVariety(t *testing.T) {
+	seen := make(map[string]struct{})
+	for i := 0; i < 20; i++ {
+		seen[RandomNickname()] = struct{}{}
+	}
+	if len(seen) < 10 {
+		t.Errorf("expected at least 10 unique names in 20 calls, got %d", len(seen))
+	}
+}

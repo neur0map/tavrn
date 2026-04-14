@@ -4,29 +4,40 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 )
+
+var adjectives = []string{
+	"dusty", "quiet", "wandering", "sleepy", "hooded",
+	"scarred", "weary", "shadowy", "lone", "grizzled",
+	"nimble", "silent", "copper", "ashen", "veiled",
+	"stout", "swift", "rusty", "hollow", "mossy",
+}
+
+var nouns = []string{
+	"pilgrim", "drifter", "bard", "ranger", "rogue",
+	"sage", "merchant", "smith", "herald", "scout",
+	"monk", "keeper", "hunter", "scribe", "warden",
+	"brewer", "hermit", "jester", "rider", "ghost",
+}
 
 // DefaultNickname returns a tavern-themed name with a unique discriminator.
 // Format: adjective_noun#0000 (e.g. "dusty_pilgrim#4827")
 func DefaultNickname(fingerprint string) string {
 	hash := sha256.Sum256([]byte(fingerprint))
 
-	adjectives := []string{
-		"dusty", "quiet", "wandering", "sleepy", "hooded",
-		"scarred", "weary", "shadowy", "lone", "grizzled",
-		"nimble", "silent", "copper", "ashen", "veiled",
-		"stout", "swift", "rusty", "hollow", "mossy",
-	}
-	nouns := []string{
-		"pilgrim", "drifter", "bard", "ranger", "rogue",
-		"sage", "merchant", "smith", "herald", "scout",
-		"monk", "keeper", "hunter", "scribe", "warden",
-		"brewer", "hermit", "jester", "rider", "ghost",
-	}
-
 	adj := adjectives[int(hash[0])%len(adjectives)]
 	noun := nouns[int(hash[1])%len(nouns)]
 	disc := binary.BigEndian.Uint16(hash[2:4]) % 10000
+	return fmt.Sprintf("%s_%s#%04d", adj, noun, disc)
+}
+
+// RandomNickname returns a randomly generated tavern-themed name.
+// Format: adjective_noun#0000 (e.g. "nimble_drifter#3966")
+func RandomNickname() string {
+	adj := adjectives[rand.Intn(len(adjectives))]
+	noun := nouns[rand.Intn(len(nouns))]
+	disc := rand.Intn(10000)
 	return fmt.Sprintf("%s_%s#%04d", adj, noun, disc)
 }
 
