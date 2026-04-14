@@ -78,7 +78,7 @@
     ],
     "civic": [
       {"id": "vehicle-civic-1", "text": "a civic, yeah. dark blue. the kind of car that doesn't stand out — which is probably the point."},
-      {"id": "vehicle-civic-2", "text": "blue civic with a plate starting 4PC. if you cross that with gym memberships, you'd probably find your guy."}
+      {"id": "vehicle-civic-2", "text": "blue civic with a plate starting 4PC. cross that with the gym and you're close."}
     ],
     "blue": [
       {"id": "vehicle-blue-1", "text": "the car was blue. dark blue, not bright. a honda civic, the witness said."},
@@ -106,47 +106,40 @@
     ],
     "tall": [
       {"id": "suspect-tall-1", "text": "annabel said he was definitely tall. stood out even at a distance."},
-      {"id": "suspect-tall-2", "text": "tall guy with a gym card and a blue civic. how many people match all three?"}
+      {"id": "suspect-tall-2", "text": "tall guy with a gym card and a blue civic. that narrows it way down."}
     ],
     "gym": [
       {"id": "suspect-gym-1", "text": "the membership card was from a gym — fitness galaxy, the one on the east side."},
-      {"id": "suspect-gym-2", "text": "gym membership, blue honda, tall build. that's your guy. someone at fitness galaxy would know."}
+      {"id": "suspect-gym-2", "text": "gym membership, blue honda, tall build. someone at fitness galaxy would know who fits that."}
     ],
     "fitness": [
       {"id": "suspect-fitness-1", "text": "fitness galaxy. that's the gym on the card. not a huge place, they'd know their members."},
-      {"id": "suspect-fitness-2", "text": "if you check the fitness galaxy member list against blue honda owners... I'd bet you get one name."}
+      {"id": "suspect-fitness-2", "text": "check the fitness galaxy roster against blue civic owners. only one name overlaps."}
     ],
     "membership": [
       {"id": "suspect-membership-1", "text": "a gym membership card, torn up. but you could still read 'fitness galaxy' on it."},
-      {"id": "suspect-membership-2", "text": "that membership card is the key. combine it with the vehicle and the description, there's only one match."}
+      {"id": "suspect-membership-2", "text": "that membership card is the key. combine it with the vehicle and the description — there's only one match."}
     ],
     "galaxy": [
       {"id": "suspect-galaxy-1", "text": "fitness galaxy, over on the east end. small gym, regulars only. shouldn't be hard to check their list."},
-      {"id": "suspect-galaxy-2", "text": "one name comes up when you cross fitness galaxy members with blue civic owners. just one."}
+      {"id": "suspect-galaxy-2", "text": "one person at fitness galaxy owns a blue civic. initials J.B. that's all I'll say."}
     ],
-    "jeremy": [
-      {"id": "suspect-jeremy-1", "text": "jeremy... yeah, I've seen him around. big guy, works out at that gym on the east side."},
-      {"id": "suspect-jeremy-2", "text": "jeremy bowers. drives a blue civic. member at fitness galaxy. you do the math."}
+    "initials": [
+      {"id": "suspect-initials-1", "text": "J.B. — that's what someone at the gym told me. said the guy's been a member for years."}
     ],
-    "bowers": [
-      {"id": "suspect-bowers-1", "text": "bowers? he lives a few blocks from the park. always seemed like a quiet dude. guess not."},
-      {"id": "suspect-bowers-2", "text": "if it's bowers you're looking at, everything lines up. the car, the gym, the description. all of it."}
+    "owner": [
+      {"id": "suspect-owner-1", "text": "the civic's registered owner lives a few blocks from the park. tall dude, keeps to himself."},
+      {"id": "suspect-owner-2", "text": "the owner of that blue civic matches the description perfectly. everything lines up."}
     ],
-    "clue": [
-      {"id": "meta-clue-1", "text": "you want a clue? talk about what happened. someone might overhear and chime in."},
-      {"id": "meta-clue-2", "text": "clues are all around you. mention the crime, the witnesses, the car. see what comes back."}
+    "name": [
+      {"id": "suspect-name-1", "text": "you want a name? piece it together — the gym, the car, the initials. it's all there."},
+      {"id": "suspect-name-2", "text": "the name's out there if you look hard enough. first name starts with a J."}
     ],
-    "help": [
-      {"id": "meta-help-1", "text": "try talking about the murder. or the witnesses. someone here knows something."},
-      {"id": "meta-help-2", "text": "start with what you know. a body was found. two witnesses. a car. a gym card. follow the trail."}
+    "register": [
+      {"id": "suspect-register-1", "text": "checked the vehicle register. one blue civic with a 4PC plate. owner's a gym regular."}
     ],
-    "investigate": [
-      {"id": "meta-investigate-1", "text": "start at the scene. work your way through the witnesses. check the car, check the gym."},
-      {"id": "meta-investigate-2", "text": "the investigation path: scene to witnesses to vehicle to gym membership. it all converges on one person."}
-    ],
-    "solve": [
-      {"id": "meta-solve-1", "text": "think you know who did it? just say their name. if you're right, they'll have no choice but to confess."},
-      {"id": "meta-solve-2", "text": "to solve it, name the killer. first and last name. say it out loud and see what happens."}
+    "registration": [
+      {"id": "suspect-registration-1", "text": "the registration came back to someone in the neighborhood. tall, late 30s, gym member."}
     ]
   },
   "confession": [
