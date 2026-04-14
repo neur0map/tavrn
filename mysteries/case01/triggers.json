@@ -1,16 +1,152 @@
 {
   "triggers": {
     "murder": [
-      {"id": "scene-1", "text": "heard someone got jumped near the park last night"}
+      {"id": "scene-murder-1", "text": "heard someone got done in over by the park last night. cops were crawling all over the place."},
+      {"id": "scene-murder-2", "text": "word is they found the body on the north end. real messy scene, lots of yellow tape."}
+    ],
+    "dead": [
+      {"id": "scene-dead-1", "text": "yeah someone turned up dead near the old grove. couldn't believe it when I heard."},
+      {"id": "scene-dead-2", "text": "the dead guy — nobody seems to know who he was. but a couple people saw things go down."}
     ],
     "body": [
-      {"id": "scene-2", "text": "yeah the cops were all over the north side"}
+      {"id": "scene-body-1", "text": "they found the body just off the path by the north park entrance. still had his wallet on him."},
+      {"id": "scene-body-2", "text": "whoever did this didn't even try to hide the body. left him right there in the open."}
+    ],
+    "crime": [
+      {"id": "scene-crime-1", "text": "crime scene was taped off for hours. I heard two people came forward as witnesses."},
+      {"id": "scene-crime-2", "text": "the crime report mentioned two key witnesses. one lives nearby, the other was just passing through."}
+    ],
+    "killed": [
+      {"id": "scene-killed-1", "text": "someone got killed right out in the open. a woman who lives on the block saw part of it."},
+      {"id": "scene-killed-2", "text": "whoever killed that guy took off in a car. at least one person got a look at it."}
+    ],
+    "police": [
+      {"id": "scene-police-1", "text": "police said they're looking for a tall guy. that's about all they'll say publicly."},
+      {"id": "scene-police-2", "text": "police talked to two witnesses so far. one named annabel, the other caught the getaway car."}
+    ],
+    "scene": [
+      {"id": "scene-scene-1", "text": "the scene was on the north side, near the park. happened late, not many people around."},
+      {"id": "scene-scene-2", "text": "at the scene they found some kind of membership card fragment. couldn't read much off it."}
+    ],
+    "evidence": [
+      {"id": "scene-evidence-1", "text": "only real evidence so far is witness statements and a partial plate number from a car."},
+      {"id": "scene-evidence-2", "text": "they found a torn piece of a gym membership card near the scene. that's all I know."}
     ],
     "witness": [
-      {"id": "scene-3", "text": "talk to the lady on maple, she saw everything"}
+      {"id": "witness-general-1", "text": "two witnesses came forward. one's a woman named annabel who lives on maple street, right near where it happened."},
+      {"id": "witness-general-2", "text": "the other witness was across the road. saw a car peel out — blue sedan, older model."}
+    ],
+    "witnesses": [
+      {"id": "witness-plural-1", "text": "both witnesses saw different things. annabel saw the guy up close. the other one caught the car."},
+      {"id": "witness-plural-2", "text": "neither witness knew the attacker. but between the two of them, there's enough to narrow it down."}
+    ],
+    "annabel": [
+      {"id": "witness-annabel-1", "text": "annabel? yeah she lives over on maple street, third floor. she was coming home when she saw it all."},
+      {"id": "witness-annabel-2", "text": "annabel said the guy was real tall. she noticed he dropped something — looked like a membership card from a gym."}
+    ],
+    "saw": [
+      {"id": "witness-saw-1", "text": "she saw a tall man running from the scene. big guy, hard to miss even in the dark."},
+      {"id": "witness-saw-2", "text": "the other person saw the car — said it was a blue honda, maybe a civic. caught the first few characters of the plate."}
+    ],
+    "heard": [
+      {"id": "witness-heard-1", "text": "I heard annabel was the main witness. she's shaken up but she gave a good description."},
+      {"id": "witness-heard-2", "text": "heard the getaway car was a honda. dark blue, nothing fancy. the plate started with 4PC something."}
+    ],
+    "maple": [
+      {"id": "location-maple-1", "text": "maple street, yeah. annabel's been living there for years. she was the one who called it in."},
+      {"id": "location-maple-2", "text": "the whole block on maple was crawling with cops after. annabel's the only one who'd talk though."}
+    ],
+    "street": [
+      {"id": "location-street-1", "text": "happened right off the street near the park. not well lit over there at night."},
+      {"id": "location-street-2", "text": "annabel lives on maple street. she saw the whole thing from her window and ran down."}
+    ],
+    "park": [
+      {"id": "location-park-1", "text": "the park on the north end. that's where they found him. real quiet area after dark."},
+      {"id": "location-park-2", "text": "near the park entrance, that's where the car was parked. peeled out heading east."}
+    ],
+    "north": [
+      {"id": "location-north-1", "text": "north side of town, by the park. not a lot of foot traffic that late."},
+      {"id": "location-north-2", "text": "the north park area. annabel lives a couple blocks from there on maple."}
     ],
     "car": [
-      {"id": "vehicle-1", "text": "someone saw a blue sedan speed off after"}
+      {"id": "vehicle-car-1", "text": "someone saw a blue sedan tear out of there. older model honda, looked like a civic."},
+      {"id": "vehicle-car-2", "text": "the car had a plate starting with 4PC. couldn't get the rest, it was moving too fast."}
+    ],
+    "honda": [
+      {"id": "vehicle-honda-1", "text": "blue honda, probably a civic. not new, maybe early 2000s. the witness was pretty sure about the make."},
+      {"id": "vehicle-honda-2", "text": "how many people drive blue hondas in this town? fewer than you'd think. cops are checking registrations."}
+    ],
+    "civic": [
+      {"id": "vehicle-civic-1", "text": "a civic, yeah. dark blue. the kind of car that doesn't stand out — which is probably the point."},
+      {"id": "vehicle-civic-2", "text": "blue civic with a plate starting 4PC. if you cross that with gym memberships, you'd probably find your guy."}
+    ],
+    "blue": [
+      {"id": "vehicle-blue-1", "text": "the car was blue. dark blue, not bright. a honda civic, the witness said."},
+      {"id": "vehicle-blue-2", "text": "blue sedan, heading east out of the park area. partial plate was 4PC-something."}
+    ],
+    "sedan": [
+      {"id": "vehicle-sedan-1", "text": "blue sedan. four doors. looked like a civic or an accord. the witness leaned toward civic."},
+      {"id": "vehicle-sedan-2", "text": "that sedan was booked. whoever was driving didn't plan on being seen."}
+    ],
+    "plate": [
+      {"id": "vehicle-plate-1", "text": "partial plate — 4PC, that's all they got. the rest was covered in mud or something."},
+      {"id": "vehicle-plate-2", "text": "4PC is the start of the plate. cross-reference that with blue hondas and you'll have a short list."}
+    ],
+    "license": [
+      {"id": "vehicle-license-1", "text": "license plate started with 4PC. cops are running it through the system now."},
+      {"id": "vehicle-license-2", "text": "even a partial license narrows it down a lot when you combine it with the vehicle description."}
+    ],
+    "suspect": [
+      {"id": "suspect-general-1", "text": "the suspect is a tall man. annabel got a decent look at him before he took off."},
+      {"id": "suspect-general-2", "text": "whoever it is, he's got a gym membership. that card fragment they found by the body was from fitness galaxy."}
+    ],
+    "man": [
+      {"id": "suspect-man-1", "text": "big man, tall. that's what annabel kept saying. hard to tell much else in the dark."},
+      {"id": "suspect-man-2", "text": "a man driving a blue honda civic. tall, gym member. that's the profile they're working with."}
+    ],
+    "tall": [
+      {"id": "suspect-tall-1", "text": "annabel said he was definitely tall. stood out even at a distance."},
+      {"id": "suspect-tall-2", "text": "tall guy with a gym card and a blue civic. how many people match all three?"}
+    ],
+    "gym": [
+      {"id": "suspect-gym-1", "text": "the membership card was from a gym — fitness galaxy, the one on the east side."},
+      {"id": "suspect-gym-2", "text": "gym membership, blue honda, tall build. that's your guy. someone at fitness galaxy would know."}
+    ],
+    "fitness": [
+      {"id": "suspect-fitness-1", "text": "fitness galaxy. that's the gym on the card. not a huge place, they'd know their members."},
+      {"id": "suspect-fitness-2", "text": "if you check the fitness galaxy member list against blue honda owners... I'd bet you get one name."}
+    ],
+    "membership": [
+      {"id": "suspect-membership-1", "text": "a gym membership card, torn up. but you could still read 'fitness galaxy' on it."},
+      {"id": "suspect-membership-2", "text": "that membership card is the key. combine it with the vehicle and the description, there's only one match."}
+    ],
+    "galaxy": [
+      {"id": "suspect-galaxy-1", "text": "fitness galaxy, over on the east end. small gym, regulars only. shouldn't be hard to check their list."},
+      {"id": "suspect-galaxy-2", "text": "one name comes up when you cross fitness galaxy members with blue civic owners. just one."}
+    ],
+    "jeremy": [
+      {"id": "suspect-jeremy-1", "text": "jeremy... yeah, I've seen him around. big guy, works out at that gym on the east side."},
+      {"id": "suspect-jeremy-2", "text": "jeremy bowers. drives a blue civic. member at fitness galaxy. you do the math."}
+    ],
+    "bowers": [
+      {"id": "suspect-bowers-1", "text": "bowers? he lives a few blocks from the park. always seemed like a quiet dude. guess not."},
+      {"id": "suspect-bowers-2", "text": "if it's bowers you're looking at, everything lines up. the car, the gym, the description. all of it."}
+    ],
+    "clue": [
+      {"id": "meta-clue-1", "text": "you want a clue? talk about what happened. someone might overhear and chime in."},
+      {"id": "meta-clue-2", "text": "clues are all around you. mention the crime, the witnesses, the car. see what comes back."}
+    ],
+    "help": [
+      {"id": "meta-help-1", "text": "try talking about the murder. or the witnesses. someone here knows something."},
+      {"id": "meta-help-2", "text": "start with what you know. a body was found. two witnesses. a car. a gym card. follow the trail."}
+    ],
+    "investigate": [
+      {"id": "meta-investigate-1", "text": "start at the scene. work your way through the witnesses. check the car, check the gym."},
+      {"id": "meta-investigate-2", "text": "the investigation path: scene to witnesses to vehicle to gym membership. it all converges on one person."}
+    ],
+    "solve": [
+      {"id": "meta-solve-1", "text": "think you know who did it? just say their name. if you're right, they'll have no choice but to confess."},
+      {"id": "meta-solve-2", "text": "to solve it, name the killer. first and last name. say it out loud and see what happens."}
     ]
   },
   "confession": [
