@@ -21,6 +21,7 @@ import (
 	"tavrn.sh/internal/gif"
 	"tavrn.sh/internal/hub"
 	"tavrn.sh/internal/jukebox"
+	"tavrn.sh/internal/mystery"
 	"tavrn.sh/internal/poll"
 	"tavrn.sh/internal/reddit"
 	"tavrn.sh/internal/sanitize"
@@ -576,6 +577,20 @@ func runServer() {
 		log.Println("reddit feed: no subreddits configured (use --feed-add)")
 	}
 
+	// Mystery engine (optional — loads if mysteries/case01 exists)
+	var mysteryEngine *mystery.Engine
+	caseDir := resolvedPath("mysteries/case01")
+	if _, statErr := os.Stat(caseDir); statErr == nil {
+		me, loadErr := mystery.New(caseDir)
+		if loadErr != nil {
+			log.Printf("mystery: failed to load: %v", loadErr)
+		} else {
+			mysteryEngine = me
+		}
+	} else {
+		log.Println("mystery: no case data found (skipping)")
+	}
+
 	// web search
 	var searcher *search.Searcher
 	exaKey := os.Getenv("EXA_API_KEY")
@@ -608,6 +623,7 @@ func runServer() {
 		Searcher:         searcher,
 		DMStore:          initDMStore(st),
 		RedditClient:     redditClient,
+		MysteryEngine:    mysteryEngine,
 	})
 	if err != nil {
 		log.Fatalf("server: %v", err)
@@ -616,7 +632,7 @@ func runServer() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go startPurgeScheduler(st, h, pollStore)
+	go startPurgeScheduler(st, h, pollStore, mysteryEngine)
 	if bt != nil {
 		go func() {
 			for {
@@ -844,7 +860,7 @@ func initDMStore(st *store.Store) *dm.Store {
 	return ds
 }
 
-func startPurgeScheduler(st *store.Store, h *hub.Hub, ps *poll.Store) {
+func startPurgeScheduler(st *store.Store, h *hub.Hub, ps *poll.Store, me *mystery.Engine) {
 	for {
 		now := time.Now().UTC()
 		daysUntilSunday := (7 - int(now.Weekday())) % 7
@@ -862,6 +878,9 @@ func startPurgeScheduler(st *store.Store, h *hub.Hub, ps *poll.Store) {
 		})
 		st.PurgeAll()
 		ps.Clear()
+		if me != nil {
+			me.Reset()
+		}
 		log.Println("Weekly purge complete")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"tavrn.sh/internal/hub"
 	"tavrn.sh/internal/identity"
 	"tavrn.sh/internal/jukebox"
+	"tavrn.sh/internal/mystery"
 	"tavrn.sh/internal/poll"
 	"tavrn.sh/internal/reddit"
 	"tavrn.sh/internal/search"
@@ -52,6 +54,7 @@ type Config struct {
 	Searcher         *search.Searcher
 	DMStore          *dm.Store
 	RedditClient     *reddit.Client
+	MysteryEngine    *mystery.Engine
 }
 
 type Server struct {
@@ -377,6 +380,41 @@ func (s *Server) teaHandler(sshSess ssh.Session) (tea.Model, []tea.ProgramOption
 				}
 				broadcastBartender(reply)
 			}()
+		}
+
+		// Mystery engine — keyword triggers in lounge chat
+		if s.cfg.MysteryEngine != nil && s.cfg.MysteryEngine.IsActive() && msg.Type == session.MsgChat && msg.Room == firstRoom {
+			result := s.cfg.MysteryEngine.Check(msg.Text)
+			if result != nil {
+				go func() {
+					if result.Solved {
+						time.Sleep(time.Duration(2000+rand.Intn(1000)) * time.Millisecond)
+						for i, line := range result.Confession {
+							if i > 0 {
+								time.Sleep(time.Duration(1500+rand.Intn(1000)) * time.Millisecond)
+							}
+							s.cfg.Hub.Broadcast(firstRoom, session.Msg{
+								Type:       session.MsgChat,
+								Nickname:   result.Killer,
+								ColorIndex: rand.Intn(14),
+								Text:       line,
+								Room:       firstRoom,
+							})
+						}
+					} else {
+						for _, clue := range result.Clues {
+							time.Sleep(time.Duration(1000+rand.Intn(2000)) * time.Millisecond)
+							s.cfg.Hub.Broadcast(firstRoom, session.Msg{
+								Type:       session.MsgChat,
+								Nickname:   result.Sender,
+								ColorIndex: rand.Intn(14),
+								Text:       clue.Text,
+								Room:       firstRoom,
+							})
+						}
+					}
+				}()
+			}
 		}
 	}
 
