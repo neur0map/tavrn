@@ -1,0 +1,20 @@
+{
+  "triggers": {
+    "murder": [
+      {"id": "scene-1", "text": "heard someone got jumped near the park last night"}
+    ],
+    "body": [
+      {"id": "scene-2", "text": "yeah the cops were all over the north side"}
+    ],
+    "witness": [
+      {"id": "scene-3", "text": "talk to the lady on maple, she saw everything"}
+    ],
+    "car": [
+      {"id": "vehicle-1", "text": "someone saw a blue sedan speed off after"}
+    ]
+  },
+  "confession": [
+    "...you got me. I did it. All of it.",
+    "should've left town when I had the chance."
+  ]
+}
